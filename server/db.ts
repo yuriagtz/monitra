@@ -1,6 +1,15 @@
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { 
+  InsertUser, 
+  users, 
+  landingPages, 
+  InsertLandingPage,
+  monitoringHistory,
+  InsertMonitoringHistory,
+  screenshots,
+  InsertScreenshot
+} from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -89,4 +98,76 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+// Landing Pages
+export async function createLandingPage(data: InsertLandingPage) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const result = await db.insert(landingPages).values(data);
+  return result[0].insertId;
+}
+
+export async function getLandingPagesByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select().from(landingPages).where(eq(landingPages.userId, userId));
+}
+
+export async function getLandingPageById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  
+  const result = await db.select().from(landingPages).where(eq(landingPages.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function deleteLandingPage(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.delete(landingPages).where(eq(landingPages.id, id));
+}
+
+// Monitoring History
+export async function createMonitoringHistory(data: InsertMonitoringHistory) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const result = await db.insert(monitoringHistory).values(data);
+  return result[0].insertId;
+}
+
+export async function getMonitoringHistoryByLandingPageId(landingPageId: number, limit = 50) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db
+    .select()
+    .from(monitoringHistory)
+    .where(eq(monitoringHistory.landingPageId, landingPageId))
+    .orderBy(desc(monitoringHistory.checkedAt))
+    .limit(limit);
+}
+
+// Screenshots
+export async function upsertScreenshot(data: InsertScreenshot) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.insert(screenshots).values(data).onDuplicateKeyUpdate({
+    set: {
+      screenshotUrl: data.screenshotUrl,
+      fileKey: data.fileKey,
+      capturedAt: data.capturedAt || new Date(),
+    },
+  });
+}
+
+export async function getScreenshotByLandingPageId(landingPageId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  
+  const result = await db.select().from(screenshots).where(eq(screenshots.landingPageId, landingPageId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
