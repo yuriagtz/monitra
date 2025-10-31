@@ -21,7 +21,15 @@ export async function captureScreenshot(url: string): Promise<Buffer> {
   try {
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 800 });
-    await page.goto(url, { waitUntil: "networkidle0", timeout: 30000 });
+    
+    // Set longer timeout and use domcontentloaded instead of networkidle0
+    await page.goto(url, { 
+      waitUntil: "domcontentloaded", 
+      timeout: 60000 
+    });
+    
+    // Wait a bit for dynamic content to load
+    await new Promise(resolve => setTimeout(resolve, 2000));
     
     const screenshot = await page.screenshot({ fullPage: true });
     return screenshot as Buffer;
@@ -46,7 +54,10 @@ export async function checkLinkStatus(url: string): Promise<{ ok: boolean; statu
 
   try {
     const page = await browser.newPage();
-    const response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
+    const response = await page.goto(url, { 
+      waitUntil: "domcontentloaded", 
+      timeout: 60000 
+    });
     
     if (!response) {
       return { ok: false, error: "No response received" };
@@ -108,8 +119,25 @@ export async function monitorLandingPage(landingPageId: number): Promise<{
     throw new Error("Landing page not found");
   }
 
-  // Check link status
-  const linkStatus = await checkLinkStatus(landingPage.url);
+  // Check link status with retry
+  let linkStatus: { ok: boolean; status?: number; error?: string } = { ok: false, error: "Unknown error" };
+  let retries = 0;
+  const maxRetries = 2;
+  
+  while (retries <= maxRetries) {
+    try {
+      linkStatus = await checkLinkStatus(landingPage.url);
+      break;
+    } catch (error: any) {
+      retries++;
+      if (retries > maxRetries) {
+        linkStatus = { ok: false, error: `Failed after ${maxRetries} retries: ${error.message}` };
+      } else {
+        // Wait before retry
+        await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+      }
+    }
+  }
   
   if (!linkStatus.ok) {
     await db.createMonitoringHistory({
@@ -126,8 +154,27 @@ export async function monitorLandingPage(landingPageId: number): Promise<{
     };
   }
 
-  // Capture new screenshot
-  const newScreenshotBuffer = await captureScreenshot(landingPage.url);
+  // Capture new screenshot with retry
+  let newScreenshotBuffer;
+  retries = 0;
+  
+  while (retries <= maxRetries) {
+    try {
+      newScreenshotBuffer = await captureScreenshot(landingPage.url);
+      break;
+    } catch (error: any) {
+      retries++;
+      if (retries > maxRetries) {
+        throw new Error(`スクリーンショット撮影に失敗しました (${maxRetries}回リトライ後): ${error.message}`);
+      }
+      // Wait before retry
+      await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+    }
+  }
+  
+  if (!newScreenshotBuffer) {
+    throw new Error("スクリーンショット撮影に失敗しました");
+  }
   const timestamp = Date.now();
   const fileKey = `screenshots/${landingPageId}/${timestamp}.png`;
   
