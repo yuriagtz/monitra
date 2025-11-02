@@ -114,6 +114,72 @@ export const appRouter = router({
       }),
   }),
   
+  analytics: router({
+    summary: protectedProcedure.query(async ({ ctx }) => {
+      const lps = await db.getLandingPagesByUserId(ctx.user.id);
+      const allHistory = await Promise.all(
+        lps.map(lp => db.getMonitoringHistoryByLandingPageId(lp.id))
+      );
+      const flatHistory = allHistory.flat();
+      
+      return {
+        totalLPs: lps.length,
+        totalChecks: flatHistory.length,
+        changesDetected: flatHistory.filter(h => h.status === 'changed').length,
+        errorsCount: flatHistory.filter(h => h.status === 'error').length,
+      };
+    }),
+    
+    changeFrequency: protectedProcedure.query(async ({ ctx }) => {
+      const lps = await db.getLandingPagesByUserId(ctx.user.id);
+      const result = await Promise.all(
+        lps.map(async (lp) => {
+          const history = await db.getMonitoringHistoryByLandingPageId(lp.id);
+          return {
+            name: lp.title || lp.url.substring(0, 30) + '...',
+            changes: history.filter(h => h.status === 'changed').length,
+            checks: history.length,
+          };
+        })
+      );
+      return result.filter(r => r.checks > 0);
+    }),
+    
+    changeTrend: protectedProcedure
+      .input(z.object({ landingPageId: z.number().optional() }))
+      .query(async ({ ctx, input }) => {
+        let history;
+        if (input.landingPageId) {
+          const lp = await db.getLandingPageById(input.landingPageId);
+          if (!lp || lp.userId !== ctx.user.id) {
+            throw new Error('Not found or unauthorized');
+          }
+          history = await db.getMonitoringHistoryByLandingPageId(input.landingPageId);
+        } else {
+          const lps = await db.getLandingPagesByUserId(ctx.user.id);
+          const allHistory = await Promise.all(
+            lps.map(lp => db.getMonitoringHistoryByLandingPageId(lp.id))
+          );
+          history = allHistory.flat();
+        }
+        
+        // Group by date
+        const grouped = history.reduce((acc, h) => {
+          const date = h.createdAt.toISOString().split('T')[0];
+          if (!acc[date]) {
+            acc[date] = { date, changes: 0, checks: 0 };
+          }
+          acc[date].checks++;
+          if (h.status === 'changed') {
+            acc[date].changes++;
+          }
+          return acc;
+        }, {} as Record<string, { date: string; changes: number; checks: number }>);
+        
+        return Object.values(grouped).sort((a, b) => a.date.localeCompare(b.date));
+      }),
+  }),
+  
   monitoring: router({
     recent: protectedProcedure
       .input(z.object({ limit: z.number().optional() }))
@@ -143,3 +209,6 @@ export const appRouter = router({
 });
 
 export type AppRouter = typeof appRouter;
+
+// Export for use in other files
+export { db };
