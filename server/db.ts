@@ -12,7 +12,10 @@ import {
   tags,
   InsertTag,
   landingPageTags,
-  InsertLandingPageTag
+  InsertLandingPageTag,
+  notificationSettings,
+  type NotificationSetting,
+  type InsertNotificationSetting
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -242,4 +245,31 @@ export async function getTagsForLandingPage(landingPageId: number) {
   .where(eq(landingPageTags.landingPageId, landingPageId));
   
   return result;
+}
+
+// Notification settings
+export async function getNotificationSettings(userId: number): Promise<NotificationSetting | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  
+  const result = await db.select().from(notificationSettings).where(eq(notificationSettings.userId, userId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function upsertNotificationSettings(userId: number, settings: Partial<InsertNotificationSetting>): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  
+  const existing = await getNotificationSettings(userId);
+  
+  if (existing) {
+    await db.update(notificationSettings)
+      .set({ ...settings, updatedAt: new Date() })
+      .where(eq(notificationSettings.userId, userId));
+  } else {
+    await db.insert(notificationSettings).values({
+      userId,
+      ...settings,
+    } as InsertNotificationSetting);
+  }
 }

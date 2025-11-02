@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import LandingPages from "./pages/LandingPages";
 import MonitoringHistory from "./pages/MonitoringHistory";
 import Settings from "./pages/Settings";
+import Notifications from "./pages/Notifications";
 import Analytics from "./pages/Analytics";
 
 function Router() {
@@ -19,7 +20,7 @@ function Router() {
         <Route path="/lps" component={LandingPages} />
         <Route path="/history/:id" component={MonitoringHistory} />
         <Route path="/analytics" component={Analytics} />
-        <Route path="/notifications" component={() => <div className="p-6"><h1 className="text-2xl font-bold">通知設定</h1><p className="text-muted-foreground mt-2">準備中...</p></div>} />
+        <Route path="/notifications" component={Notifications} />
         <Route path="/schedules" component={() => <div className="p-6"><h1 className="text-2xl font-bold">スケジュール設定</h1><p className="text-muted-foreground mt-2">準備中...</p></div>} />
         <Route path="/import-export" component={() => <div className="p-6"><h1 className="text-2xl font-bold">インポート/エクスポート</h1><p className="text-muted-foreground mt-2">準備中...</p></div>} />
         <Route path="/settings" component={Settings} />

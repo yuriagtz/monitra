@@ -104,3 +104,37 @@ export const landingPageTags = mysqlTable("landing_page_tags", {
 
 export type LandingPageTag = typeof landingPageTags.$inferSelect;
 export type InsertLandingPageTag = typeof landingPageTags.$inferInsert;
+
+/**
+ * Notification settings table
+ */
+export const notificationSettings = mysqlTable("notification_settings", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").notNull(),
+  
+  // Notification channels
+  emailEnabled: int("email_enabled").default(0).notNull(),
+  emailAddress: text("email_address"),
+  
+  slackEnabled: int("slack_enabled").default(0).notNull(),
+  slackWebhookUrl: text("slack_webhook_url"),
+  
+  discordEnabled: int("discord_enabled").default(0).notNull(),
+  discordWebhookUrl: text("discord_webhook_url"),
+  
+  chatworkEnabled: int("chatwork_enabled").default(0).notNull(),
+  chatworkApiToken: text("chatwork_api_token"),
+  chatworkRoomId: text("chatwork_room_id"),
+  
+  // Notification conditions
+  notifyOnChange: int("notify_on_change").default(1).notNull(),
+  notifyOnError: int("notify_on_error").default(1).notNull(),
+  notifyOnBrokenLink: int("notify_on_broken_link").default(1).notNull(),
+  ignoreFirstViewOnly: int("ignore_first_view_only").default(0).notNull(),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+export type NotificationSetting = typeof notificationSettings.$inferSelect;
+export type InsertNotificationSetting = typeof notificationSettings.$inferInsert;
