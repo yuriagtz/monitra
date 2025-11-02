@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE monitoring_history (\n  id INT AUTO_INCREMENT PRIMARY KEY,\n  landing_page_id INT NOT NULL,\n  check_type ENUM('content_change', 'link_broken') NOT NULL,\n  status ENUM('ok', 'changed', 'error') NOT NULL,\n  message TEXT,\n  screenshot_url TEXT,\n  previous_screenshot_url TEXT,\n  diff_image_url TEXT,\n  diff_top_third VARCHAR(20),\n  diff_middle_third VARCHAR(20),\n  diff_bottom_third VARCHAR(20),\n  region_analysis TEXT,\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3VQ5qTroJTjfEXG.6e615fccede9 --database JGcngLeruPbg6CfTPFheh9 --execute CREATE TABLE monitoring_history (\n  id INT AUTO_INCREMENT PRIMARY KEY,\n  landing_page_id INT NOT NULL,\n  check_type ENUM('content_change', 'link_broken') NOT NULL,\n  status ENUM('ok', 'changed', 'error') NOT NULL,\n  message TEXT,\n  screenshot_url TEXT,\n  previous_screenshot_url TEXT,\n  diff_image_url TEXT,\n  diff_top_third VARCHAR(20),\n  diff_middle_third VARCHAR(20),\n  diff_bottom_third VARCHAR(20),\n  region_analysis TEXT,\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1634
+}

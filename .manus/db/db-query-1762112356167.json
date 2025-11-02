@@ -1,0 +1,49 @@
+{
+  "query": "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'monitoring_history' ORDER BY ORDINAL_POSITION;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3VQ5qTroJTjfEXG.6e615fccede9 --database JGcngLeruPbg6CfTPFheh9 --execute SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'monitoring_history' ORDER BY ORDINAL_POSITION;",
+  "rows": [
+    {
+      "COLUMN_NAME": "id"
+    },
+    {
+      "COLUMN_NAME": "landingPageId"
+    },
+    {
+      "COLUMN_NAME": "checkType"
+    },
+    {
+      "COLUMN_NAME": "status"
+    },
+    {
+      "COLUMN_NAME": "message"
+    },
+    {
+      "COLUMN_NAME": "screenshotUrl"
+    },
+    {
+      "COLUMN_NAME": "previousScreenshotUrl"
+    },
+    {
+      "COLUMN_NAME": "diffImageUrl"
+    },
+    {
+      "COLUMN_NAME": "checkedAt"
+    },
+    {
+      "COLUMN_NAME": "diff_top_third"
+    },
+    {
+      "COLUMN_NAME": "diff_middle_third"
+    },
+    {
+      "COLUMN_NAME": "diff_bottom_third"
+    },
+    {
+      "COLUMN_NAME": "region_analysis"
+    }
+  ],
+  "messages": [],
+  "stdout": "COLUMN_NAME\nid\nlandingPageId\ncheckType\nstatus\nmessage\nscreenshotUrl\npreviousScreenshotUrl\ndiffImageUrl\ncheckedAt\ndiff_top_third\ndiff_middle_third\ndiff_bottom_third\nregion_analysis\n",
+  "stderr": "",
+  "execution_time_ms": 1504
+}
