@@ -46,14 +46,19 @@ export type InsertLandingPage = typeof landingPages.$inferInsert;
  */
 export const monitoringHistory = mysqlTable("monitoring_history", {
   id: int("id").autoincrement().primaryKey(),
-  landingPageId: int("landingPageId").notNull(),
-  checkType: mysqlEnum("checkType", ["content_change", "link_broken"]).notNull(),
+  landingPageId: int("landing_page_id").notNull(),
+  checkType: mysqlEnum("check_type", ["content_change", "link_broken"]).notNull(),
   status: mysqlEnum("status", ["ok", "changed", "error"]).notNull(),
   message: text("message"),
-  screenshotUrl: text("screenshotUrl"),
-  previousScreenshotUrl: text("previousScreenshotUrl"),
-  diffImageUrl: text("diffImageUrl"),
-  checkedAt: timestamp("checkedAt").defaultNow().notNull(),
+  screenshotUrl: text("screenshot_url"),
+  previousScreenshotUrl: text("previous_screenshot_url"),
+  diffImageUrl: text("diff_image_url"),
+  // Region-based diff analysis
+  diffTopThird: varchar("diff_top_third", { length: 20 }),
+  diffMiddleThird: varchar("diff_middle_third", { length: 20 }),
+  diffBottomThird: varchar("diff_bottom_third", { length: 20 }),
+  regionAnalysis: text("region_analysis"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export type MonitoringHistory = typeof monitoringHistory.$inferSelect;

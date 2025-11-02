@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE monitoring_history \nADD COLUMN diff_top_third VARCHAR(20),\nADD COLUMN diff_middle_third VARCHAR(20),\nADD COLUMN diff_bottom_third VARCHAR(20),\nADD COLUMN region_analysis TEXT;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3VQ5qTroJTjfEXG.6e615fccede9 --database JGcngLeruPbg6CfTPFheh9 --execute ALTER TABLE monitoring_history \nADD COLUMN diff_top_third VARCHAR(20),\nADD COLUMN diff_middle_third VARCHAR(20),\nADD COLUMN diff_bottom_third VARCHAR(20),\nADD COLUMN region_analysis TEXT;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 3064
+}

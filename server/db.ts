@@ -146,7 +146,7 @@ export async function getMonitoringHistoryByLandingPageId(landingPageId: number,
     .select()
     .from(monitoringHistory)
     .where(eq(monitoringHistory.landingPageId, landingPageId))
-    .orderBy(desc(monitoringHistory.checkedAt))
+    .orderBy(desc(monitoringHistory.createdAt))
     .limit(limit);
 }
 

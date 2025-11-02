@@ -106,7 +106,7 @@ export default function MonitoringHistory() {
                 {history.map((item) => (
                   <TableRow key={item.id}>
                     <TableCell>
-                      {new Date(item.checkedAt).toLocaleString("ja-JP")}
+                      {new Date(item.createdAt).toLocaleString("ja-JP")}
                     </TableCell>
                     <TableCell>{getCheckTypeBadge(item.checkType)}</TableCell>
                     <TableCell>
@@ -115,7 +115,16 @@ export default function MonitoringHistory() {
                         {getStatusBadge(item.status)}
                       </div>
                     </TableCell>
-                    <TableCell>{item.message}</TableCell>
+                    <TableCell>
+                      <div>
+                        {item.message}
+                        {item.regionAnalysis && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            {item.regionAnalysis}
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-right">
                       {item.screenshotUrl && (
                         <Button
@@ -163,6 +172,19 @@ export default function MonitoringHistory() {
               {selectedHistory.diffImageUrl && (
                 <div>
                   <h3 className="font-semibold mb-2">差分画像</h3>
+                  {selectedHistory.regionAnalysis && (
+                    <div className="mb-2 p-3 bg-muted rounded">
+                      <p className="text-sm font-medium">領域別分析:</p>
+                      <p className="text-sm">{selectedHistory.regionAnalysis}</p>
+                      {selectedHistory.diffTopThird && (
+                        <div className="text-xs mt-2 space-y-1">
+                          <div>上部(ファーストビュー): {selectedHistory.diffTopThird}%</div>
+                          <div>中部: {selectedHistory.diffMiddleThird}%</div>
+                          <div>下部: {selectedHistory.diffBottomThird}%</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <img
                     src={selectedHistory.diffImageUrl}
                     alt="Diff image"
