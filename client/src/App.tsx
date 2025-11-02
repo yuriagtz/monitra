@@ -8,6 +8,7 @@ import DashboardLayout from "./components/DashboardLayout";
 import Dashboard from "./pages/Dashboard";
 import LandingPages from "./pages/LandingPages";
 import MonitoringHistory from "./pages/MonitoringHistory";
+import Settings from "./pages/Settings";
 
 function Router() {
   return (
@@ -20,7 +21,7 @@ function Router() {
         <Route path="/notifications" component={() => <div className="p-6"><h1 className="text-2xl font-bold">通知設定</h1><p className="text-muted-foreground mt-2">準備中...</p></div>} />
         <Route path="/schedules" component={() => <div className="p-6"><h1 className="text-2xl font-bold">スケジュール設定</h1><p className="text-muted-foreground mt-2">準備中...</p></div>} />
         <Route path="/import-export" component={() => <div className="p-6"><h1 className="text-2xl font-bold">インポート/エクスポート</h1><p className="text-muted-foreground mt-2">準備中...</p></div>} />
-        <Route path="/settings" component={() => <div className="p-6"><h1 className="text-2xl font-bold">設定</h1><p className="text-muted-foreground mt-2">準備中...</p></div>} />
+        <Route path="/settings" component={Settings} />
         <Route path={"/404"} component={NotFound} />
         <Route component={NotFound} />
       </Switch>

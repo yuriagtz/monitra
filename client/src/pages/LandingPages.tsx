@@ -8,10 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Loader2, Plus, Trash2, Eye, RefreshCw, Search, X } from "lucide-react";
 import { useLocation } from "wouter";
-import { TagManager } from "@/components/TagManager";
 import { LPTagSelector } from "@/components/LPTagSelector";
 
 export default function LandingPages() {
@@ -174,7 +174,7 @@ export default function LandingPages() {
         </div>
         
         {/* Search and Filter */}
-        <div className="flex gap-4 items-center flex-wrap">
+        <div className="flex gap-4 items-center">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
@@ -195,36 +195,30 @@ export default function LandingPages() {
           
           {/* Tag filter */}
           {allTags && allTags.length > 0 && (
-            <div className="flex gap-2 items-center flex-wrap">
-              <span className="text-sm text-muted-foreground">タグ:</span>
-              <Badge
-                variant={selectedTagFilter === null ? "default" : "outline"}
-                className="cursor-pointer"
-                onClick={() => setSelectedTagFilter(null)}
-              >
-                すべて
-              </Badge>
-              {allTags.map((tag) => (
-                <Badge
-                  key={tag.id}
-                  variant={selectedTagFilter === tag.id ? "default" : "outline"}
-                  style={selectedTagFilter === tag.id ? { backgroundColor: tag.color, color: "white" } : {}}
-                  className="cursor-pointer"
-                  onClick={() => setSelectedTagFilter(tag.id)}
-                >
-                  {tag.name}
-                </Badge>
-              ))}
-            </div>
+            <Select
+              value={selectedTagFilter?.toString() || "all"}
+              onValueChange={(value) => setSelectedTagFilter(value === "all" ? null : parseInt(value))}
+            >
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="タグで絞り込み" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">すべてのタグ</SelectItem>
+                {allTags.map((tag) => (
+                  <SelectItem key={tag.id} value={tag.id.toString()}>
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: tag.color }}
+                      />
+                      {tag.name}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
         </div>
-        
-        {/* Tag Manager */}
-        <Card>
-          <CardContent className="pt-6">
-            <TagManager />
-          </CardContent>
-        </Card>
       </div>
       
       <Card>
