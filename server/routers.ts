@@ -51,6 +51,52 @@ export const appRouter = router({
       }),
   }),
   
+  tags: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      return await db.getTagsByUserId(ctx.user.id);
+    }),
+    
+    create: protectedProcedure
+      .input(z.object({
+        name: z.string().min(1).max(50),
+        color: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const id = await db.createTag({
+          ...input,
+          userId: ctx.user.id,
+        });
+        return { id };
+      }),
+    
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteTag(input.id);
+        return { success: true };
+      }),
+    
+    addToLandingPage: protectedProcedure
+      .input(z.object({ landingPageId: z.number(), tagId: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.addTagToLandingPage(input.landingPageId, input.tagId);
+        return { success: true };
+      }),
+    
+    removeFromLandingPage: protectedProcedure
+      .input(z.object({ landingPageId: z.number(), tagId: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.removeTagFromLandingPage(input.landingPageId, input.tagId);
+        return { success: true };
+      }),
+    
+    getForLandingPage: protectedProcedure
+      .input(z.object({ landingPageId: z.number() }))
+      .query(async ({ input }) => {
+        return await db.getTagsForLandingPage(input.landingPageId);
+      }),
+  }),
+  
   monitoring: router({
     recent: protectedProcedure
       .input(z.object({ limit: z.number().optional() }))

@@ -77,3 +77,30 @@ export const screenshots = mysqlTable("screenshots", {
 
 export type Screenshot = typeof screenshots.$inferSelect;
 export type InsertScreenshot = typeof screenshots.$inferInsert;
+
+/**
+ * Tags for categorizing landing pages
+ */
+export const tags = mysqlTable("tags", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 50 }).notNull(),
+  color: varchar("color", { length: 7 }).notNull(), // Hex color code
+  userId: int("userId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Tag = typeof tags.$inferSelect;
+export type InsertTag = typeof tags.$inferInsert;
+
+/**
+ * Many-to-many relationship between landing pages and tags
+ */
+export const landingPageTags = mysqlTable("landing_page_tags", {
+  id: int("id").autoincrement().primaryKey(),
+  landingPageId: int("landingPageId").notNull(),
+  tagId: int("tagId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type LandingPageTag = typeof landingPageTags.$inferSelect;
+export type InsertLandingPageTag = typeof landingPageTags.$inferInsert;

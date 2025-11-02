@@ -8,7 +8,11 @@ import {
   monitoringHistory,
   InsertMonitoringHistory,
   screenshots,
-  InsertScreenshot
+  InsertScreenshot,
+  tags,
+  InsertTag,
+  landingPageTags,
+  InsertLandingPageTag
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -179,5 +183,63 @@ export async function getRecentMonitoringHistory(limit: number = 10) {
   const result = await db.select().from(monitoringHistory)
     .orderBy(desc(monitoringHistory.createdAt))
     .limit(limit);
+  return result;
+}
+
+// Tags
+export async function getTagsByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const result = await db.select().from(tags).where(eq(tags.userId, userId));
+  return result;
+}
+
+export async function createTag(data: InsertTag) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const result = await db.insert(tags).values(data);
+  return Number(result[0].insertId);
+}
+
+export async function deleteTag(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  // Delete tag associations first
+  await db.delete(landingPageTags).where(eq(landingPageTags.tagId, id));
+  // Then delete the tag
+  await db.delete(tags).where(eq(tags.id, id));
+}
+
+export async function addTagToLandingPage(landingPageId: number, tagId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.insert(landingPageTags).values({ landingPageId, tagId });
+}
+
+export async function removeTagFromLandingPage(landingPageId: number, tagId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.delete(landingPageTags)
+    .where(eq(landingPageTags.landingPageId, landingPageId));
+}
+
+export async function getTagsForLandingPage(landingPageId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const result = await db.select({
+    id: tags.id,
+    name: tags.name,
+    color: tags.color,
+  })
+  .from(landingPageTags)
+  .innerJoin(tags, eq(landingPageTags.tagId, tags.id))
+  .where(eq(landingPageTags.landingPageId, landingPageId));
+  
   return result;
 }
