@@ -49,6 +49,23 @@ export const appRouter = router({
         await db.deleteLandingPage(input.id);
         return { success: true };
       }),
+    
+    monitor: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const lp = await db.getLandingPageById(input.id);
+        if (!lp || lp.userId !== ctx.user.id) {
+          throw new Error("Not found or unauthorized");
+        }
+        
+        // Import monitoring function
+        const { monitorLandingPage } = await import("./monitoring");
+        
+        // Run monitoring asynchronously
+        monitorLandingPage(lp.id).catch(console.error);
+        
+        return { success: true };
+      }),
   }),
   
   tags: router({
