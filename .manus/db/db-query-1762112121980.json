@@ -1,0 +1,114 @@
+{
+  "query": "DESCRIBE monitoring_history;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3VQ5qTroJTjfEXG.6e615fccede9 --database JGcngLeruPbg6CfTPFheh9 --execute DESCRIBE monitoring_history;",
+  "rows": [
+    {
+      "Field": "id",
+      "Type": "int(11)",
+      "Null": "NO",
+      "Key": "PRI",
+      "Default": "NULL",
+      "Extra": "auto_increment"
+    },
+    {
+      "Field": "landingPageId",
+      "Type": "int(11)",
+      "Null": "NO",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "checkType",
+      "Type": "enum('content_change','link_broken')",
+      "Null": "NO",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "status",
+      "Type": "enum('ok','changed','error')",
+      "Null": "NO",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "message",
+      "Type": "text",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "screenshotUrl",
+      "Type": "text",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "previousScreenshotUrl",
+      "Type": "text",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "diffImageUrl",
+      "Type": "text",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "checkedAt",
+      "Type": "timestamp",
+      "Null": "NO",
+      "Key": "",
+      "Default": "CURRENT_TIMESTAMP",
+      "Extra": ""
+    },
+    {
+      "Field": "diff_top_third",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "diff_middle_third",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "diff_bottom_third",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "region_analysis",
+      "Type": "text",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    }
+  ],
+  "messages": [],
+  "stdout": "Field\tType\tNull\tKey\tDefault\tExtra\nid\tint(11)\tNO\tPRI\tNULL\tauto_increment\nlandingPageId\tint(11)\tNO\t\tNULL\t\ncheckType\tenum('content_change','link_broken')\tNO\t\tNULL\t\nstatus\tenum('ok','changed','error')\tNO\t\tNULL\t\nmessage\ttext\tYES\t\tNULL\t\nscreenshotUrl\ttext\tYES\t\tNULL\t\npreviousScreenshotUrl\ttext\tYES\t\tNULL\t\ndiffImageUrl\ttext\tYES\t\tNULL\t\ncheckedAt\ttimestamp\tNO\t\tCURRENT_TIMESTAMP\t\ndiff_top_third\tvarchar(20)\tYES\t\tNULL\t\ndiff_middle_third\tvarchar(20)\tYES\t\tNULL\t\ndiff_bottom_third\tvarchar(20)\tYES\t\tNULL\t\nregion_analysis\ttext\tYES\t\tNULL\t\n",
+  "stderr": "",
+  "execution_time_ms": 1522
+}
