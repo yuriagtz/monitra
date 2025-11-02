@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { 
   InsertUser, 
@@ -170,4 +170,14 @@ export async function getScreenshotByLandingPageId(landingPageId: number) {
   
   const result = await db.select().from(screenshots).where(eq(screenshots.landingPageId, landingPageId)).limit(1);
   return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getRecentMonitoringHistory(limit: number = 10) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const result = await db.select().from(monitoringHistory)
+    .orderBy(desc(monitoringHistory.createdAt))
+    .limit(limit);
+  return result;
 }

@@ -19,11 +19,11 @@ export default function LandingPages() {
   const [newDescription, setNewDescription] = useState("");
 
   const utils = trpc.useUtils();
-  const { data: landingPages, isLoading } = trpc.landingPages.list.useQuery();
+  const { data: landingPages, isLoading } = trpc.lp.list.useQuery();
   
-  const createMutation = trpc.landingPages.create.useMutation({
+  const createMutation = trpc.lp.create.useMutation({
     onSuccess: () => {
-      utils.landingPages.list.invalidate();
+      utils.lp.list.invalidate();
       setIsAddDialogOpen(false);
       setNewUrl("");
       setNewTitle("");
@@ -35,9 +35,9 @@ export default function LandingPages() {
     },
   });
 
-  const deleteMutation = trpc.landingPages.delete.useMutation({
+  const deleteMutation = trpc.lp.delete.useMutation({
     onSuccess: () => {
-      utils.landingPages.list.invalidate();
+      utils.lp.list.invalidate();
       toast.success("LPを削除しました");
     },
     onError: (error) => {
@@ -91,15 +91,13 @@ export default function LandingPages() {
   }
 
   return (
-    <div className="container py-8">
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-2xl">LP監視システム</CardTitle>
-              <CardDescription>登録したランディングページの変更を監視します</CardDescription>
-            </div>
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">LP管理</h1>
+          <p className="text-muted-foreground mt-2">登録したランディングページの一覧と管理</p>
+        </div>
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
               <DialogTrigger asChild>
                 <Button>
                   <Plus className="w-4 h-4 mr-2" />
@@ -151,10 +149,11 @@ export default function LandingPages() {
                   </Button>
                 </DialogFooter>
               </DialogContent>
-            </Dialog>
-          </div>
-        </CardHeader>
-        <CardContent>
+        </Dialog>
+      </div>
+      
+      <Card>
+        <CardContent className="pt-6">
           {!landingPages || landingPages.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <p>登録されているLPがありません</p>

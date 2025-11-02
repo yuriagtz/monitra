@@ -20,7 +20,7 @@ export const appRouter = router({
     }),
   }),
 
-  landingPages: router({
+  lp: router({
     list: protectedProcedure.query(async ({ ctx }) => {
       return await db.getLandingPagesByUserId(ctx.user.id);
     }),
@@ -52,6 +52,13 @@ export const appRouter = router({
   }),
   
   monitoring: router({
+    recent: protectedProcedure
+      .input(z.object({ limit: z.number().optional() }))
+      .query(async ({ input }) => {
+        const limit = input.limit || 10;
+        return await db.getRecentMonitoringHistory(limit);
+      }),
+    
     history: protectedProcedure
       .input(z.object({ landingPageId: z.number() }))
       .query(async ({ input }) => {
