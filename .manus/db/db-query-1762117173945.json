@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE IF NOT EXISTS schedule_settings (\n  id INT AUTO_INCREMENT PRIMARY KEY,\n  landing_page_id INT NOT NULL,\n  enabled INT DEFAULT 1 NOT NULL,\n  schedule_type ENUM('interval', 'cron') DEFAULT 'interval' NOT NULL,\n  interval_minutes INT DEFAULT 60,\n  cron_expression TEXT,\n  last_run_at TIMESTAMP NULL,\n  next_run_at TIMESTAMP NULL,\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,\n  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL\n)",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3VQ5qTroJTjfEXG.6e615fccede9 --database JGcngLeruPbg6CfTPFheh9 --execute CREATE TABLE IF NOT EXISTS schedule_settings (\n  id INT AUTO_INCREMENT PRIMARY KEY,\n  landing_page_id INT NOT NULL,\n  enabled INT DEFAULT 1 NOT NULL,\n  schedule_type ENUM('interval', 'cron') DEFAULT 'interval' NOT NULL,\n  interval_minutes INT DEFAULT 60,\n  cron_expression TEXT,\n  last_run_at TIMESTAMP NULL,\n  next_run_at TIMESTAMP NULL,\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,\n  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL\n)",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1666
+}

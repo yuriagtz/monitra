@@ -138,3 +138,26 @@ export const notificationSettings = mysqlTable("notification_settings", {
 
 export type NotificationSetting = typeof notificationSettings.$inferSelect;
 export type InsertNotificationSetting = typeof notificationSettings.$inferInsert;
+
+/**
+ * Schedule settings table
+ */
+export const scheduleSettings = mysqlTable("schedule_settings", {
+  id: int("id").autoincrement().primaryKey(),
+  landingPageId: int("landing_page_id").notNull(),
+  enabled: int("enabled").default(1).notNull(),
+  
+  // Schedule type: interval (minutes) or cron expression
+  scheduleType: mysqlEnum("schedule_type", ["interval", "cron"]).default("interval").notNull(),
+  intervalMinutes: int("interval_minutes").default(60), // For interval type
+  cronExpression: text("cron_expression"), // For cron type
+  
+  lastRunAt: timestamp("last_run_at"),
+  nextRunAt: timestamp("next_run_at"),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ScheduleSetting = typeof scheduleSettings.$inferSelect;
+export type InsertScheduleSetting = typeof scheduleSettings.$inferInsert;

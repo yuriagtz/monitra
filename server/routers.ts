@@ -296,6 +296,99 @@ export const appRouter = router({
         return result;
       }),
   }),
+  
+  schedules: router({
+    list: protectedProcedure.query(async () => {
+      return await db.getAllScheduleSettings();
+    }),
+    
+    get: protectedProcedure
+      .input(z.object({ landingPageId: z.number() }))
+      .query(async ({ input }) => {
+        return await db.getScheduleSettings(input.landingPageId);
+      }),
+    
+    upsert: protectedProcedure
+      .input(z.object({
+        landingPageId: z.number(),
+        scheduleType: z.enum(["interval", "cron"]),
+        intervalMinutes: z.number().optional(),
+        cronExpression: z.string().optional(),
+        enabled: z.boolean().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { landingPageId, enabled, ...settings } = input;
+        const id = await db.upsertScheduleSettings(landingPageId, {
+          ...settings,
+          enabled: enabled !== undefined ? (enabled ? 1 : 0) : undefined,
+        });
+        
+        // Import scheduler dynamically to avoid circular dependency
+        const { startSchedule } = await import('./scheduler');
+        if (enabled) {
+          await startSchedule(id);
+        }
+        
+        return { success: true, id };
+      }),
+    
+    delete: protectedProcedure
+      .input(z.object({ landingPageId: z.number() }))
+      .mutation(async ({ input }) => {
+        const schedule = await db.getScheduleSettings(input.landingPageId);
+        if (schedule) {
+          const { stopSchedule } = await import('./scheduler');
+          stopSchedule(schedule.id);
+        }
+        
+        await db.deleteScheduleSettings(input.landingPageId);
+        return { success: true };
+      }),
+    
+    start: protectedProcedure
+      .input(z.object({ scheduleId: z.number() }))
+      .mutation(async ({ input }) => {
+        const { startSchedule } = await import('./scheduler');
+        await startSchedule(input.scheduleId);
+        return { success: true };
+      }),
+    
+    stop: protectedProcedure
+      .input(z.object({ scheduleId: z.number() }))
+      .mutation(async ({ input }) => {
+        const { stopSchedule } = await import('./scheduler');
+        stopSchedule(input.scheduleId);
+        return { success: true };
+      }),
+  }),
+  
+  importExport: router({
+    importLps: protectedProcedure
+      .input(z.object({
+        lps: z.array(z.object({
+          title: z.string(),
+          url: z.string(),
+          description: z.string().optional(),
+        })),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const results = [];
+        for (const lp of input.lps) {
+          try {
+            const id = await db.createLandingPage({
+              userId: ctx.user.id,
+              title: lp.title,
+              url: lp.url,
+              description: lp.description || '',
+            });
+            results.push({ success: true, id, title: lp.title });
+          } catch (error) {
+            results.push({ success: false, title: lp.title, error: String(error) });
+          }
+        }
+        return { results };
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

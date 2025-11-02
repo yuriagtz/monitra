@@ -10,6 +10,8 @@ import LandingPages from "./pages/LandingPages";
 import MonitoringHistory from "./pages/MonitoringHistory";
 import Settings from "./pages/Settings";
 import Notifications from "./pages/Notifications";
+import Schedules from "./pages/Schedules";
+import ImportExport from "./pages/ImportExport";
 import Analytics from "./pages/Analytics";
 
 function Router() {
@@ -21,8 +23,8 @@ function Router() {
         <Route path="/history/:id" component={MonitoringHistory} />
         <Route path="/analytics" component={Analytics} />
         <Route path="/notifications" component={Notifications} />
-        <Route path="/schedules" component={() => <div className="p-6"><h1 className="text-2xl font-bold">スケジュール設定</h1><p className="text-muted-foreground mt-2">準備中...</p></div>} />
-        <Route path="/import-export" component={() => <div className="p-6"><h1 className="text-2xl font-bold">インポート/エクスポート</h1><p className="text-muted-foreground mt-2">準備中...</p></div>} />
+        <Route path="/schedules" component={Schedules} />
+        <Route path="/import-export" component={ImportExport} />
         <Route path="/settings" component={Settings} />
         <Route path={"/404"} component={NotFound} />
         <Route component={NotFound} />

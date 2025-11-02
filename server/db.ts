@@ -15,7 +15,10 @@ import {
   InsertLandingPageTag,
   notificationSettings,
   type NotificationSetting,
-  type InsertNotificationSetting
+  type InsertNotificationSetting,
+  scheduleSettings,
+  type ScheduleSetting,
+  type InsertScheduleSetting
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -272,4 +275,47 @@ export async function upsertNotificationSettings(userId: number, settings: Parti
       ...settings,
     } as InsertNotificationSetting);
   }
+}
+
+// Schedule settings
+export async function getScheduleSettings(landingPageId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  
+  const result = await db.select().from(scheduleSettings).where(eq(scheduleSettings.landingPageId, landingPageId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getAllScheduleSettings() {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select().from(scheduleSettings);
+}
+
+export async function upsertScheduleSettings(landingPageId: number, settings: Partial<InsertScheduleSetting>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const existing = await getScheduleSettings(landingPageId);
+  
+  if (existing) {
+    await db.update(scheduleSettings)
+      .set({ ...settings, updatedAt: new Date() })
+      .where(eq(scheduleSettings.landingPageId, landingPageId));
+    return existing.id;
+  } else {
+    const result = await db.insert(scheduleSettings).values({
+      landingPageId,
+      ...settings,
+    } as InsertScheduleSetting);
+    return result[0].insertId;
+  }
+}
+
+export async function deleteScheduleSettings(landingPageId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.delete(scheduleSettings).where(eq(scheduleSettings.landingPageId, landingPageId));
 }
