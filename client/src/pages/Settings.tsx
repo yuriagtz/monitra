@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Upload, Loader2 } from "lucide-react";
 import { TagManager } from "@/components/TagManager";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -17,6 +19,9 @@ export default function Settings() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const updateProfile = trpc.auth.updateProfile.useMutation({
     onSuccess: () => {
@@ -41,7 +46,11 @@ export default function Settings() {
   });
 
   const handleUpdateProfile = () => {
-    updateProfile.mutate({ name, email });
+    updateProfile.mutate({ 
+      name, 
+      email,
+      profileImage: profileImage || undefined 
+    });
   };
 
   const handleChangePassword = () => {
@@ -71,10 +80,69 @@ export default function Settings() {
         <CardHeader>
           <CardTitle>プロフィール設定</CardTitle>
           <CardDescription>
-            表示名とメールアドレスを変更できます
+            表示名、メールアドレス、プロフィール画像を変更できます
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* プロフィール画像 */}
+          <div className="space-y-2">
+            <Label>プロフィール画像</Label>
+            <div className="flex items-center gap-4">
+              <Avatar className="w-20 h-20">
+                <AvatarImage src={profileImage || user?.profileImage || ""} />
+                <AvatarFallback className="text-2xl">{user?.name?.charAt(0) || "U"}</AvatarFallback>
+              </Avatar>
+              <div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    
+                    if (file.size > 5 * 1024 * 1024) {
+                      toast.error("画像サイズは5MB以下にしてください");
+                      return;
+                    }
+                    
+                    setUploadingImage(true);
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      setProfileImage(reader.result as string);
+                      setUploadingImage(false);
+                      toast.success("画像をアップロードしました");
+                    };
+                    reader.readAsDataURL(file);
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingImage}
+                >
+                  {uploadingImage ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      アップロード中...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4 mr-2" />
+                      画像を選択
+                    </>
+                  )}
+                </Button>
+                <p className="text-xs text-muted-foreground mt-1">
+                  JPG, PNG, GIF (5MB以下)
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="name">表示名</Label>
             <Input

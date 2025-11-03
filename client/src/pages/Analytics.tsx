@@ -1,7 +1,10 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
-import { Loader2 } from "lucide-react";
+import { Loader2, Download } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 import { useState } from "react";
 import {
   BarChart,
@@ -19,6 +22,19 @@ import {
 export default function Analytics() {
   const [selectedLP, setSelectedLP] = useState<string>("all");
   
+  const exportToPDF = async () => {
+    const element = document.getElementById("analytics-report");
+    if (!element) return;
+
+    const canvas = await html2canvas(element, { scale: 2 });
+    const imgData = canvas.toDataURL("image/png");
+    const pdf = new jsPDF("p", "mm", "a4");
+    const imgWidth = 210;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
+    pdf.save(`lp-analytics-report-${new Date().toISOString().split("T")[0]}.pdf`);
+  };
+  
   const { data: lps } = trpc.lp.list.useQuery();
   const { data: changeFrequency, isLoading: isLoadingFreq } = trpc.analytics.changeFrequency.useQuery();
   const { data: changeTrend, isLoading: isLoadingTrend } = trpc.analytics.changeTrend.useQuery({
@@ -26,14 +42,20 @@ export default function Analytics() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" id="analytics-report">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">分析レポート</h1>
           <p className="text-muted-foreground mt-2">LP監視の統計情報とトレンド分析</p>
         </div>
         
-        <Select value={selectedLP} onValueChange={setSelectedLP}>
+        <div className="flex gap-2">
+          <Button onClick={exportToPDF}>
+            <Download className="w-4 h-4 mr-2" />
+            PDFエクスポート
+          </Button>
+          
+          <Select value={selectedLP} onValueChange={setSelectedLP}>
           <SelectTrigger className="w-[250px]">
             <SelectValue placeholder="LPを選択" />
           </SelectTrigger>
@@ -46,6 +68,7 @@ export default function Analytics() {
             ))}
           </SelectContent>
         </Select>
+        </div>
       </div>
 
       {/* Change Frequency Chart */}

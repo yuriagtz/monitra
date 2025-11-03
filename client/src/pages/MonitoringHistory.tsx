@@ -4,9 +4,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Loader2, ArrowLeft, AlertCircle, CheckCircle, XCircle } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Loader2, ArrowLeft, AlertCircle, CheckCircle, XCircle, CalendarIcon } from "lucide-react";
 import { useLocation, useRoute } from "wouter";
 import { useState } from "react";
+import { format } from "date-fns";
+import { ja } from "date-fns/locale";
 
 export default function MonitoringHistory() {
   const [, setLocation] = useLocation();
@@ -15,11 +20,24 @@ export default function MonitoringHistory() {
 
   const [selectedHistory, setSelectedHistory] = useState<any>(null);
   const [isImageDialogOpen, setIsImageDialogOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [startDate, setStartDate] = useState<Date | undefined>();
+  const [endDate, setEndDate] = useState<Date | undefined>();
 
-  const { data: history, isLoading } = trpc.monitoring.history.useQuery(
+  const { data: allHistory, isLoading } = trpc.monitoring.history.useQuery(
     { landingPageId },
     { enabled: landingPageId > 0 }
   );
+
+  // フィルタリング処理
+  const history = allHistory?.filter((item) => {
+    if (statusFilter !== "all" && item.status !== statusFilter) return false;
+    if (typeFilter !== "all" && item.checkType !== typeFilter) return false;
+    if (startDate && new Date(item.createdAt) < startDate) return false;
+    if (endDate && new Date(item.createdAt) > endDate) return false;
+    return true;
+  });
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -79,6 +97,72 @@ export default function MonitoringHistory() {
           LPリストに戻る
         </Button>
       </div>
+
+      {/* フィルターセクション */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>フィルター</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <label className="text-sm font-medium mb-2 block">ステータス</label>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">すべて</SelectItem>
+                  <SelectItem value="ok">正常</SelectItem>
+                  <SelectItem value="changed">変更検出</SelectItem>
+                  <SelectItem value="error">エラー</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-2 block">変更タイプ</label>
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">すべて</SelectItem>
+                  <SelectItem value="content_change">コンテンツ変更</SelectItem>
+                  <SelectItem value="link_broken">リンク切れ</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-2 block">開始日</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-start text-left font-normal">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {startDate ? format(startDate, "PPP", { locale: ja }) : "選択してください"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar mode="single" selected={startDate} onSelect={setStartDate} locale={ja} />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-2 block">終了日</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-start text-left font-normal">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {endDate ? format(endDate, "PPP", { locale: ja }) : "選択してください"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar mode="single" selected={endDate} onSelect={setEndDate} locale={ja} />
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
