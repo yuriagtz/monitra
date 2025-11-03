@@ -1,16 +1,73 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import * as db from "./db";
+import { getDb } from "./db";
+import { users } from "../drizzle/schema";
+import { eq } from "drizzle-orm";
 import { monitorLandingPage } from "./monitoring";
+import bcrypt from 'bcrypt';
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
+    updateProfile: protectedProcedure
+      .input(z.object({
+        name: z.string().optional(),
+        email: z.string().email().optional(),
+        profileImage: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error('Database not available');
+
+        const updates: any = {};
+        if (input.name !== undefined) updates.name = input.name;
+        if (input.email !== undefined) updates.email = input.email;
+        if (input.profileImage !== undefined) updates.profileImage = input.profileImage;
+
+        if (Object.keys(updates).length > 0) {
+          await db.update(users)
+            .set(updates)
+            .where(eq(users.id, ctx.user.id));
+        }
+
+        return { success: true };
+      }),
+    changePassword: protectedProcedure
+      .input(z.object({
+        currentPassword: z.string().optional(),
+        newPassword: z.string().min(8),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error('Database not available');
+
+        // Get current user
+        const [user] = await db.select().from(users).where(eq(users.id, ctx.user.id)).limit(1);
+        
+        // If user has existing password, verify current password
+        if (user.password && input.currentPassword) {
+          const isValid = await bcrypt.compare(input.currentPassword, user.password);
+          if (!isValid) {
+            throw new Error('Current password is incorrect');
+          }
+        }
+
+        // Hash new password
+        const hashedPassword = await bcrypt.hash(input.newPassword, 10);
+
+        // Update password
+        await db.update(users)
+          .set({ password: hashedPassword })
+          .where(eq(users.id, ctx.user.id));
+
+        return { success: true };
+      }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
