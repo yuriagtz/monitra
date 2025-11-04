@@ -17,7 +17,7 @@ export default function Dashboard() {
       <div>
         <h1 className="text-3xl font-bold">ダッシュボード</h1>
         <p className="text-muted-foreground mt-2">
-          LP監視システムの概要を表示します
+          Monitraの概要を表示します
         </p>
       </div>
 
