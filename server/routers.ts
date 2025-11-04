@@ -15,6 +15,79 @@ export const appRouter = router({
   system: systemRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
+    register: publicProcedure
+      .input(z.object({
+        name: z.string(),
+        email: z.string().email(),
+        password: z.string().min(8),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const database = await getDb();
+        if (!database) throw new Error('Database not available');
+
+        // Check if user already exists
+        const existing = await database.select().from(users).where(eq(users.email, input.email)).limit(1);
+        if (existing.length > 0) {
+          throw new Error('このメールアドレスはすでに登録されています');
+        }
+
+        // Hash password
+        const hashedPassword = await bcrypt.hash(input.password, 10);
+
+        // Create user with a temporary openId (email-based)
+        const openId = `local_${input.email}_${Date.now()}`;
+        await database.insert(users).values({
+          openId,
+          name: input.name,
+          email: input.email,
+          password: hashedPassword,
+          loginMethod: 'local',
+          role: 'user',
+        });
+
+        // Get the created user
+        const [newUser] = await database.select().from(users).where(eq(users.email, input.email)).limit(1);
+
+        // Set session cookie
+        const token = Buffer.from(JSON.stringify({ userId: newUser.id, openId: newUser.openId })).toString('base64');
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, token, cookieOptions);
+
+        return { success: true, user: newUser };
+      }),
+    login: publicProcedure
+      .input(z.object({
+        email: z.string().email(),
+        password: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const database = await getDb();
+        if (!database) throw new Error('Database not available');
+
+        // Find user by email
+        const [user] = await database.select().from(users).where(eq(users.email, input.email)).limit(1);
+        if (!user || !user.password) {
+          throw new Error('メールアドレスまたはパスワードが正しくありません');
+        }
+
+        // Verify password
+        const isValid = await bcrypt.compare(input.password, user.password);
+        if (!isValid) {
+          throw new Error('メールアドレスまたはパスワードが正しくありません');
+        }
+
+        // Update last signed in
+        await database.update(users)
+          .set({ lastSignedIn: new Date() })
+          .where(eq(users.id, user.id));
+
+        // Set session cookie
+        const token = Buffer.from(JSON.stringify({ userId: user.id, openId: user.openId })).toString('base64');
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, token, cookieOptions);
+
+        return { success: true, user };
+      }),
     updateProfile: protectedProcedure
       .input(z.object({
         name: z.string().optional(),

@@ -13,12 +13,41 @@ import Notifications from "./pages/Notifications";
 import Schedules from "./pages/Schedules";
 import ImportExport from "./pages/ImportExport";
 import Analytics from "./pages/Analytics";
+import Landing from "./pages/Landing";
+import Register from "./pages/Register";
+import Login from "./pages/Login";
+import { useAuth } from "./_core/hooks/useAuth";
+import { Loader2 } from "lucide-react";
 
-function Router() {
+function ProtectedRoutes() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  // If not authenticated, show landing page
+  if (!user) {
+    return (
+      <Switch>
+        <Route path="/" component={Landing} />
+        <Route path="/register" component={Register} />
+        <Route path="/login" component={Login} />
+        <Route component={Landing} />
+      </Switch>
+    );
+  }
+
+  // If authenticated, show dashboard
   return (
     <DashboardLayout>
       <Switch>
-        <Route path={"/"} component={Dashboard} />
+        <Route path="/" component={Dashboard} />
+        <Route path="/dashboard" component={Dashboard} />
         <Route path="/lps" component={LandingPages} />
         <Route path="/history/:id" component={MonitoringHistory} />
         <Route path="/analytics" component={Analytics} />
@@ -26,7 +55,7 @@ function Router() {
         <Route path="/schedules" component={Schedules} />
         <Route path="/import-export" component={ImportExport} />
         <Route path="/settings" component={Settings} />
-        <Route path={"/404"} component={NotFound} />
+        <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
       </Switch>
     </DashboardLayout>
@@ -47,7 +76,7 @@ function App() {
       >
         <TooltipProvider>
           <Toaster />
-          <Router />
+          <ProtectedRoutes />
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

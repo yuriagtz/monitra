@@ -260,6 +260,22 @@ class SDKServer {
     // Regular authentication flow
     const cookies = this.parseCookies(req.headers.cookie);
     const sessionCookie = cookies.get(COOKIE_NAME);
+    
+    // Try to parse as local auth session first (base64 encoded JSON)
+    try {
+      const decoded = Buffer.from(sessionCookie || '', 'base64').toString('utf-8');
+      const localSession = JSON.parse(decoded);
+      if (localSession.userId && localSession.openId) {
+        // This is a local auth session
+        const user = await db.getUserByOpenId(localSession.openId);
+        if (user) {
+          return user;
+        }
+      }
+    } catch (e) {
+      // Not a local session, continue with OAuth flow
+    }
+    
     const session = await this.verifySession(sessionCookie);
 
     if (!session) {
