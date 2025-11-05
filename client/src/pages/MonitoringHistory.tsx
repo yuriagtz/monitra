@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Loader2, ArrowLeft, AlertCircle, CheckCircle, XCircle, CalendarIcon } from "lucide-react";
+import { Loader2, ArrowLeft, CalendarIcon } from "lucide-react";
 import { useLocation, useRoute } from "wouter";
 import { useState } from "react";
 import { format } from "date-fns";
@@ -27,7 +27,12 @@ export default function MonitoringHistory() {
 
   const { data: allHistory, isLoading } = trpc.monitoring.history.useQuery(
     { landingPageId },
-    { enabled: landingPageId > 0 }
+    { 
+      enabled: landingPageId > 0,
+      staleTime: 0, // キャッシュを使わずに常に最新を取得
+      refetchOnMount: true, // マウント時に再取得
+      refetchOnWindowFocus: true, // ウィンドウフォーカス時に再取得
+    }
   );
 
   // フィルタリング処理
@@ -39,29 +44,18 @@ export default function MonitoringHistory() {
     return true;
   });
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "ok":
-        return <CheckCircle className="w-4 h-4 text-green-500" />;
-      case "changed":
-        return <AlertCircle className="w-4 h-4 text-yellow-500" />;
-      case "error":
-        return <XCircle className="w-4 h-4 text-red-500" />;
-      default:
-        return null;
-    }
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "ok":
-        return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">正常</Badge>;
-      case "changed":
-        return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">変更検出</Badge>;
-      case "error":
-        return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">エラー</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
+  const getStatusBadge = (status: string, checkType?: string) => {
+    // LP管理の一覧画面と同じ表記にする
+    if (status === "ok") {
+      return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">変更なし</Badge>;
+    } else if (status === "changed") {
+      return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">変更検出</Badge>;
+    } else if (status === "error" && checkType === "link_broken") {
+      return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">リンク切れ</Badge>;
+    } else if (status === "error") {
+      return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">エラー</Badge>;
+    } else {
+      return <Badge variant="outline">未監視</Badge>;
     }
   };
 
@@ -92,7 +86,7 @@ export default function MonitoringHistory() {
   return (
     <div className="container py-8">
       <div className="mb-4">
-        <Button variant="ghost" onClick={() => setLocation("/")}>
+        <Button variant="ghost" onClick={() => setLocation("/lps")}>
           <ArrowLeft className="w-4 h-4 mr-2" />
           LPリストに戻る
         </Button>
@@ -177,29 +171,28 @@ export default function MonitoringHistory() {
             </div>
           ) : (
             <Table>
-              <TableHeader>
+              <TableHeader className="bg-muted/50">
                 <TableRow>
-                  <TableHead>チェック日時</TableHead>
-                  <TableHead>種類</TableHead>
-                  <TableHead>ステータス</TableHead>
-                  <TableHead>メッセージ</TableHead>
-                  <TableHead className="text-right">操作</TableHead>
+                  <TableHead className="text-center">チェック日時</TableHead>
+                  <TableHead className="text-center">変更タイプ</TableHead>
+                  <TableHead className="text-center">ステータス</TableHead>
+                  <TableHead className="text-center">メッセージ</TableHead>
+                  <TableHead className="text-center">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {history.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell>
+                  <TableRow key={item.id} className="hover:bg-muted/30 transition-colors">
+                    <TableCell className="text-center">
                       {new Date(item.createdAt).toLocaleString("ja-JP")}
                     </TableCell>
-                    <TableCell>{getCheckTypeBadge(item.checkType)}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        {getStatusIcon(item.status)}
-                        {getStatusBadge(item.status)}
+                    <TableCell className="text-center">{getCheckTypeBadge(item.checkType)}</TableCell>
+                    <TableCell className="text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        {getStatusBadge(item.status, item.checkType)}
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-center">
                       <div>
                         {item.message}
                         {item.regionAnalysis && (
@@ -209,16 +202,15 @@ export default function MonitoringHistory() {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="text-right">
-                      {item.screenshotUrl && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleViewImages(item)}
-                        >
-                          画像を表示
-                        </Button>
-                      )}
+                    <TableCell className="text-center">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleViewImages(item)}
+                        disabled={!item.screenshotUrl}
+                      >
+                        画像を表示
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -233,7 +225,7 @@ export default function MonitoringHistory() {
           <DialogHeader>
             <DialogTitle>スクリーンショット比較</DialogTitle>
           </DialogHeader>
-          {selectedHistory && (
+          {selectedHistory && selectedHistory.screenshotUrl ? (
             <div className="space-y-4">
               <div>
                 <h3 className="font-semibold mb-2">現在のスクリーンショット</h3>
@@ -245,7 +237,7 @@ export default function MonitoringHistory() {
               </div>
               {selectedHistory.previousScreenshotUrl && (
                 <div>
-                  <h3 className="font-semibold mb-2">前回のスクリーンショット</h3>
+                  <h3 className="font-semibold mb-2">前回のスクリーンショット（前回変更時）</h3>
                   <img
                     src={selectedHistory.previousScreenshotUrl}
                     alt="Previous screenshot"
@@ -276,6 +268,11 @@ export default function MonitoringHistory() {
                   />
                 </div>
               )}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>この監視履歴には画像が保存されていません</p>
+              <p className="text-sm mt-2">変更が検出されなかったため、画像は保存されませんでした</p>
             </div>
           )}
         </DialogContent>

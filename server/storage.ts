@@ -1,102 +1,187 @@
-// Preconfigured storage helpers for Manus WebDev templates
-// Uses the Biz-provided storage proxy (Authorization: Bearer <token>)
+// Supabase Storage helpers for file uploads
+// Uses Supabase Storage for screenshots and other files
 
+import { createAdminClient } from './_core/supabase';
 import { ENV } from './_core/env';
 
-type StorageConfig = { baseUrl: string; apiKey: string };
-
-function getStorageConfig(): StorageConfig {
-  const baseUrl = ENV.forgeApiUrl;
-  const apiKey = ENV.forgeApiKey;
-
-  if (!baseUrl || !apiKey) {
-    throw new Error(
-      "Storage proxy credentials missing: set BUILT_IN_FORGE_API_URL and BUILT_IN_FORGE_API_KEY"
-    );
-  }
-
-  return { baseUrl: baseUrl.replace(/\/+$/, ""), apiKey };
-}
-
-function buildUploadUrl(baseUrl: string, relKey: string): URL {
-  const url = new URL("v1/storage/upload", ensureTrailingSlash(baseUrl));
-  url.searchParams.set("path", normalizeKey(relKey));
-  return url;
-}
-
-async function buildDownloadUrl(
-  baseUrl: string,
-  relKey: string,
-  apiKey: string
-): Promise<string> {
-  const downloadApiUrl = new URL(
-    "v1/storage/downloadUrl",
-    ensureTrailingSlash(baseUrl)
-  );
-  downloadApiUrl.searchParams.set("path", normalizeKey(relKey));
-  const response = await fetch(downloadApiUrl, {
-    method: "GET",
-    headers: buildAuthHeaders(apiKey),
-  });
-  return (await response.json()).url;
-}
-
-function ensureTrailingSlash(value: string): string {
-  return value.endsWith("/") ? value : `${value}/`;
-}
+const BUCKET_NAME = 'screenshots'; // Supabase Storage bucket name
 
 function normalizeKey(relKey: string): string {
+  // Remove leading slashes and normalize path
   return relKey.replace(/^\/+/, "");
 }
 
-function toFormData(
-  data: Buffer | Uint8Array | string,
-  contentType: string,
-  fileName: string
-): FormData {
-  const blob =
-    typeof data === "string"
-      ? new Blob([data], { type: contentType })
-      : new Blob([data as any], { type: contentType });
-  const form = new FormData();
-  form.append("file", blob, fileName || "file");
-  return form;
+/**
+ * Ensure the storage bucket exists, create if it doesn't
+ */
+async function ensureBucket() {
+  const supabase = createAdminClient();
+  
+  // Check if bucket exists
+  const { data: buckets, error: listError } = await supabase.storage.listBuckets();
+  
+  if (listError) {
+    console.error("[Storage] Error listing buckets:", listError);
+    throw new Error(`Failed to access storage: ${listError.message}`);
+  }
+  
+  const bucketExists = buckets?.some(b => b.name === BUCKET_NAME);
+  
+  if (!bucketExists) {
+    // Create bucket if it doesn't exist
+    const { data, error } = await supabase.storage.createBucket(BUCKET_NAME, {
+      public: true, // Make bucket public for easy access
+      fileSizeLimit: 52428800, // 50MB limit
+      allowedMimeTypes: ['image/png', 'image/jpeg', 'image/jpg', 'image/gif'],
+    });
+    
+    if (error) {
+      console.error("[Storage] Error creating bucket:", error);
+      throw new Error(`Failed to create storage bucket: ${error.message}`);
+    }
+    
+    console.log(`[Storage] Created bucket: ${BUCKET_NAME}`);
+  }
 }
 
-function buildAuthHeaders(apiKey: string): HeadersInit {
-  return { Authorization: `Bearer ${apiKey}` };
-}
-
+/**
+ * Upload a file to Supabase Storage
+ */
 export async function storagePut(
   relKey: string,
   data: Buffer | Uint8Array | string,
   contentType = "application/octet-stream"
 ): Promise<{ key: string; url: string }> {
-  const { baseUrl, apiKey } = getStorageConfig();
-  const key = normalizeKey(relKey);
-  const uploadUrl = buildUploadUrl(baseUrl, key);
-  const formData = toFormData(data, contentType, key.split("/").pop() ?? key);
-  const response = await fetch(uploadUrl, {
-    method: "POST",
-    headers: buildAuthHeaders(apiKey),
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const message = await response.text().catch(() => response.statusText);
+  if (!ENV.supabaseUrl || !ENV.supabaseServiceRoleKey) {
     throw new Error(
-      `Storage upload failed (${response.status} ${response.statusText}): ${message}`
+      "Supabase Storage credentials missing: set VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY"
     );
   }
-  const url = (await response.json()).url;
-  return { key, url };
-}
 
-export async function storageGet(relKey: string): Promise<{ key: string; url: string; }> {
-  const { baseUrl, apiKey } = getStorageConfig();
+  const supabase = createAdminClient();
   const key = normalizeKey(relKey);
+  
+  // Ensure bucket exists
+  await ensureBucket();
+  
+  // Convert data to Buffer if needed
+  let buffer: Buffer;
+  if (typeof data === 'string') {
+    buffer = Buffer.from(data, 'utf-8');
+  } else if (data instanceof Uint8Array) {
+    buffer = Buffer.from(data);
+  } else {
+    buffer = data;
+  }
+  
+  // Upload file
+  const { data: uploadData, error: uploadError } = await supabase.storage
+    .from(BUCKET_NAME)
+    .upload(key, buffer, {
+      contentType,
+      upsert: true, // Overwrite if exists
+    });
+  
+  if (uploadError) {
+    console.error("[Storage] Upload error:", uploadError);
+    throw new Error(`Storage upload failed: ${uploadError.message}`);
+  }
+  
+  // Get public URL
+  const { data: urlData } = supabase.storage
+    .from(BUCKET_NAME)
+    .getPublicUrl(key);
+  
+  if (!urlData?.publicUrl) {
+    throw new Error("Failed to get public URL for uploaded file");
+  }
+  
   return {
     key,
-    url: await buildDownloadUrl(baseUrl, key, apiKey),
+    url: urlData.publicUrl,
   };
+}
+
+/**
+ * Get a file URL from Supabase Storage
+ */
+export async function storageGet(relKey: string): Promise<{ key: string; url: string }> {
+  if (!ENV.supabaseUrl || !ENV.supabaseServiceRoleKey) {
+    throw new Error(
+      "Supabase Storage credentials missing: set VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY"
+    );
+  }
+
+  const supabase = createAdminClient();
+  const key = normalizeKey(relKey);
+  
+  // Get public URL
+  const { data: urlData } = supabase.storage
+    .from(BUCKET_NAME)
+    .getPublicUrl(key);
+  
+  if (!urlData?.publicUrl) {
+    throw new Error(`File not found: ${key}`);
+  }
+  
+  return {
+    key,
+    url: urlData.publicUrl,
+  };
+}
+
+/**
+ * Delete a file from Supabase Storage
+ */
+export async function storageDelete(relKey: string): Promise<void> {
+  if (!ENV.supabaseUrl || !ENV.supabaseServiceRoleKey) {
+    throw new Error(
+      "Supabase Storage credentials missing: set VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY"
+    );
+  }
+
+  const supabase = createAdminClient();
+  const key = normalizeKey(relKey);
+  
+  const { error } = await supabase.storage
+    .from(BUCKET_NAME)
+    .remove([key]);
+  
+  if (error) {
+    console.error("[Storage] Delete error:", error);
+    // ファイルが存在しない場合はエラーを無視
+    if (error.message && !error.message.includes('not found')) {
+      throw new Error(`Storage delete failed: ${error.message}`);
+    }
+  }
+}
+
+/**
+ * Extract storage key from URL
+ */
+export function extractStorageKeyFromUrl(url: string): string | null {
+  try {
+    // Supabase StorageのURLからキーを抽出
+    // 例: https://xxx.supabase.co/storage/v1/object/public/screenshots/screenshots/5/1234567890.png
+    // または: https://xxx.supabase.co/storage/v1/object/public/screenshots/screenshots/5/1234567890_diff.png
+    const urlObj = new URL(url);
+    const pathParts = urlObj.pathname.split('/');
+    const screenshotsIndex = pathParts.findIndex(part => part === 'screenshots');
+    
+    if (screenshotsIndex !== -1 && screenshotsIndex < pathParts.length - 1) {
+      // "screenshots"以降の部分を結合（バケット名の"screenshots"は除外）
+      // 例: /storage/v1/object/public/screenshots/screenshots/5/1234567890.png
+      //     -> screenshots/5/1234567890.png
+      return pathParts.slice(screenshotsIndex + 1).join('/');
+    }
+    
+    // フォールバック: 正規表現で抽出
+    const match = url.match(/\/screenshots\/(.+)$/);
+    if (match) {
+      return match[1];
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }

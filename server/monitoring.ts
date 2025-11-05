@@ -1,7 +1,7 @@
 import puppeteer from "puppeteer";
 import pixelmatch from "pixelmatch";
 import { PNG } from "pngjs";
-import { storagePut, storageGet } from "./storage";
+import { storagePut, storageGet, storageDelete, extractStorageKeyFromUrl } from "./storage";
 import * as db from "./db";
 
 /**
@@ -20,6 +20,7 @@ export async function captureScreenshot(url: string): Promise<Buffer> {
 
   try {
     const page = await browser.newPage();
+    // より大きなビューポートでスクロールを確実に捉える
     await page.setViewport({ width: 1280, height: 800 });
     
     // Set longer timeout and use domcontentloaded instead of networkidle0
@@ -28,10 +29,53 @@ export async function captureScreenshot(url: string): Promise<Buffer> {
       timeout: 60000 
     });
     
-    // Wait a bit for dynamic content to load
+    // Wait for dynamic content to load
     await new Promise(resolve => setTimeout(resolve, 2000));
     
-    const screenshot = await page.screenshot({ fullPage: true });
+    // ページの実際の高さを取得して、スクロールを確実に行う
+    const pageHeight = await page.evaluate(() => {
+      return Math.max(
+        document.body.scrollHeight,
+        document.body.offsetHeight,
+        document.documentElement.clientHeight,
+        document.documentElement.scrollHeight,
+        document.documentElement.offsetHeight
+      );
+    });
+    
+    // ページの高さが大きい場合、スクロールして全体を読み込む
+    if (pageHeight > 800) {
+      // 段階的にスクロールして、遅延読み込みコンテンツを確実に読み込む
+      const viewportHeight = 800;
+      const scrollSteps = Math.ceil(pageHeight / viewportHeight);
+      
+      for (let i = 0; i < scrollSteps; i++) {
+        await page.evaluate((step) => {
+          window.scrollTo(0, step * 800);
+        }, i);
+        // 各スクロール後に少し待機
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      
+      // 最後に一番下までスクロール
+      await page.evaluate(() => {
+        window.scrollTo(0, document.body.scrollHeight);
+      });
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // トップに戻る（fullPage screenshotは最初から最後まで撮影するため）
+      await page.evaluate(() => {
+        window.scrollTo(0, 0);
+      });
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    
+    // fullPageオプションで全体を撮影（余白を確保）
+    const screenshot = await page.screenshot({ 
+      fullPage: true,
+      // スクロールバーを非表示にする（オプション）
+      captureBeyondViewport: true,
+    });
     return screenshot as Buffer;
   } finally {
     await browser.close();
@@ -106,17 +150,16 @@ export async function compareScreenshots(
 }
 
 /**
- * Compare screenshots by regions (top, middle, bottom)
+ * Compare screenshots by first view and body
  * Returns detailed analysis of which parts changed
  */
-export async function compareScreenshotsByRegion(
+export async function compareScreenshotsByFirstViewAndBody(
   img1Buffer: Buffer,
   img2Buffer: Buffer
 ): Promise<{
   overall: number;
-  topThird: number;
-  middleThird: number;
-  bottomThird: number;
+  firstView: number;
+  body: number;
   diffImageBuffer?: Buffer;
   analysis: string;
 }> {
@@ -209,86 +252,66 @@ export async function compareScreenshotsByRegion(
   );
   const overall = (numDiffPixels / (width * height)) * 100;
 
-  // Divide into three regions
-  const regionHeight = Math.floor(height / 3);
+  // Divide into first view and body
+  // First view: 800px (PCモニターの一般的なファーストビュー高さ)
+  const FIRSTVIEW_HEIGHT = 800;
+  const firstViewHeight = Math.min(FIRSTVIEW_HEIGHT, height);
   
-  // Top third (first view)
-  let topDiffPixels = 0;
-  for (let y = 0; y < regionHeight; y++) {
+  // First view region
+  let firstViewDiffPixels = 0;
+  for (let y = 0; y < firstViewHeight; y++) {
     for (let x = 0; x < width; x++) {
       const idx = (width * y + x) << 2;
       // Check if this pixel is marked as different (red in diff image)
       if (diff.data[idx] === 255 && diff.data[idx + 1] === 0 && diff.data[idx + 2] === 0) {
-        topDiffPixels++;
+        firstViewDiffPixels++;
       }
     }
   }
-  const topThird = (topDiffPixels / (width * regionHeight)) * 100;
+  const firstView = (firstViewDiffPixels / (width * firstViewHeight)) * 100;
 
-  // Middle third
-  let middleDiffPixels = 0;
-  for (let y = regionHeight; y < regionHeight * 2; y++) {
-    for (let x = 0; x < width; x++) {
-      const idx = (width * y + x) << 2;
-      if (diff.data[idx] === 255 && diff.data[idx + 1] === 0 && diff.data[idx + 2] === 0) {
-        middleDiffPixels++;
+  // Body region (remaining height)
+  let bodyDiffPixels = 0;
+  const bodyHeight = height - firstViewHeight;
+  if (bodyHeight > 0) {
+    for (let y = firstViewHeight; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const idx = (width * y + x) << 2;
+        if (diff.data[idx] === 255 && diff.data[idx + 1] === 0 && diff.data[idx + 2] === 0) {
+          bodyDiffPixels++;
+        }
       }
     }
   }
-  const middleThird = (middleDiffPixels / (width * regionHeight)) * 100;
-
-  // Bottom third
-  let bottomDiffPixels = 0;
-  for (let y = regionHeight * 2; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const idx = (width * y + x) << 2;
-      if (diff.data[idx] === 255 && diff.data[idx + 1] === 0 && diff.data[idx + 2] === 0) {
-        bottomDiffPixels++;
-      }
-    }
-  }
-  const bottomThird = (bottomDiffPixels / (width * (height - regionHeight * 2))) * 100;
+  const body = bodyHeight > 0 ? (bodyDiffPixels / (width * bodyHeight)) * 100 : 0;
 
   // Generate analysis with improved logic
   let analysis = "";
   const significantThreshold = 5.0; // 5% threshold for significant change
-  const minorThreshold = 1.0; // 1% threshold for minor change
-  
-  // Check if top has significantly more changes than middle and bottom
-  const topDominant = topThird > significantThreshold && 
-                      topThird > (middleThird * 2) && 
-                      topThird > (bottomThird * 2);
+  const minorThreshold = 3.0; // 3% threshold for minor change (changed from 1%)
   
   if (overall < minorThreshold) {
     analysis = "変更なし";
-  } else if (topDominant) {
-    // Top section has significantly more changes
-    analysis = "ファーストビュー(上部)のみ変更あり";
+  } else if (firstView > significantThreshold && body < significantThreshold && firstView > body * 2) {
+    // First view has significantly more changes than body
+    analysis = "FV変更あり";
+  } else if (body > significantThreshold && firstView < significantThreshold && body > firstView * 2) {
+    // Body has significantly more changes than first view
+    analysis = "ボディー変更あり";
+  } else if (firstView > significantThreshold && body > significantThreshold) {
+    // Both first view and body have significant changes
+    analysis = "全体変更あり";
   } else {
-    // Check which regions have significant changes
-    const changedRegions = [];
-    if (topThird > significantThreshold) changedRegions.push("上部");
-    if (middleThird > significantThreshold) changedRegions.push("中部");
-    if (bottomThird > significantThreshold) changedRegions.push("下部");
-    
-    if (changedRegions.length === 0) {
-      analysis = "軽微な変更あり";
-    } else if (changedRegions.length === 3) {
-      analysis = "ページ全体が大きく変更されています";
-    } else if (changedRegions.length === 1) {
-      analysis = `${changedRegions[0]}のみ大きく変更されています`;
-    } else {
-      analysis = `${changedRegions.join("と")}が大きく変更されています`;
-    }
+    // Minor changes (3-5% overall, but neither region exceeds 5%)
+    analysis = "軽微な変更あり";
   }
 
   const diffImageBuffer = PNG.sync.write(diff);
 
   return {
     overall,
-    topThird,
-    middleThird,
-    bottomThird,
+    firstView,
+    body,
     diffImageBuffer,
     analysis
   };
@@ -302,9 +325,8 @@ export async function monitorLandingPage(landingPageId: number): Promise<{
   linkBroken: boolean;
   diffPercentage?: number;
   regionAnalysis?: {
-    topThird: number;
-    middleThird: number;
-    bottomThird: number;
+    firstView: number;
+    body: number;
     analysis: string;
   };
   message: string;
@@ -370,42 +392,56 @@ export async function monitorLandingPage(landingPageId: number): Promise<{
   if (!newScreenshotBuffer) {
     throw new Error("スクリーンショット撮影に失敗しました");
   }
-  const timestamp = Date.now();
-  const fileKey = `screenshots/${landingPageId}/${timestamp}.png`;
-  
-  const { url: newScreenshotUrl } = await storagePut(
-    fileKey,
-    newScreenshotBuffer,
-    "image/png"
-  );
 
-  // Get previous screenshot
-  const previousScreenshot = await db.getScreenshotByLandingPageId(landingPageId);
+  // 以前の最新履歴を取得（比較用と削除用の両方で使用）
+  const previousLatestHistory = await db.getMonitoringHistoryByLandingPageId(landingPageId, 1);
+  
+  // 監視実行時に作成される履歴は常に最新の履歴として扱う
+  // （この時点ではまだ履歴が作成されていないため、常に最新）
+  const isLatestHistory = true;
   
   let contentChanged = false;
   let diffPercentage = 0;
   let diffImageUrl: string | undefined;
+  let newScreenshotUrl: string | undefined;
+  let previousScreenshotUrl: string | undefined; // 以前の最新画像（previous_screenshot_urlに設定）
+  let regionAnalysisResult = undefined;
 
-  if (previousScreenshot) {
-    // Download previous screenshot
-    const previousResponse = await fetch(previousScreenshot.screenshotUrl);
+  // 以前の最新履歴の画像がある場合は比較を行う
+  if (previousLatestHistory.length > 0 && previousLatestHistory[0].screenshotUrl) {
+    const previousHistory = previousLatestHistory[0];
+    previousScreenshotUrl = previousHistory.screenshotUrl; // 以前の最新画像を保存
+    
+    // Download previous screenshot (以前の最新画像)
+    const previousResponse = await fetch(previousHistory.screenshotUrl);
     const previousBuffer = Buffer.from(await previousResponse.arrayBuffer());
 
     // Compare screenshots with region analysis
-    const comparison = await compareScreenshotsByRegion(previousBuffer, newScreenshotBuffer);
+    const comparison = await compareScreenshotsByFirstViewAndBody(previousBuffer, newScreenshotBuffer);
     diffPercentage = comparison.overall;
     
     // Store region analysis
-    const regionAnalysis = {
-      topThird: comparison.topThird,
-      middleThird: comparison.middleThird,
-      bottomThird: comparison.bottomThird,
+    regionAnalysisResult = {
+      firstView: comparison.firstView,
+      body: comparison.body,
       analysis: comparison.analysis
     };
     
-    // Consider changed if difference is more than 1%
-    if (diffPercentage > 1) {
+    // Consider changed if difference is more than 3%
+    if (diffPercentage > 3) {
       contentChanged = true;
+      
+      // 差分がある場合のみ、Storageに新しいスクリーンショットと差分画像を保存
+      const timestamp = Date.now();
+      const fileKey = `screenshots/${landingPageId}/${timestamp}.png`;
+      
+      // Save new screenshot to Storage
+      const result = await storagePut(
+        fileKey,
+        newScreenshotBuffer,
+        "image/png"
+      );
+      newScreenshotUrl = result.url;
       
       // Save diff image
       if (comparison.diffImageBuffer) {
@@ -417,32 +453,44 @@ export async function monitorLandingPage(landingPageId: number): Promise<{
         );
         diffImageUrl = diffResult.url;
       }
+      
+      // 差分が検出されたため、新しいスクリーンショットが保存されました
+      // （screenshotsテーブルは使用しないため、更新処理は不要）
+    } else {
+      // 差分がない場合でも、最新の履歴の場合は画像を保存する
+      // 監視実行時は常に最新の履歴として扱う
+      const timestamp = Date.now();
+      const fileKey = `screenshots/${landingPageId}/${timestamp}.png`;
+      
+      // Save new screenshot to Storage (最新の履歴なので保存)
+      const result = await storagePut(
+        fileKey,
+        newScreenshotBuffer,
+        "image/png"
+      );
+      newScreenshotUrl = result.url;
+      // 差分がない場合は、screenshotsテーブルへの更新は不要
     }
+  } else {
+    // 初回実行の場合は、変更があったものとして保存
+    contentChanged = true;
+    const timestamp = Date.now();
+    const fileKey = `screenshots/${landingPageId}/${timestamp}.png`;
+    
+    // Save new screenshot to Storage
+    const result = await storagePut(
+      fileKey,
+      newScreenshotBuffer,
+      "image/png"
+    );
+    newScreenshotUrl = result.url;
+    
+    // 初回実行のため、新しいスクリーンショットが保存されました
+    // （screenshotsテーブルは使用しないため、更新処理は不要）
   }
-  
-  // Prepare region analysis for return
-  let regionAnalysisResult = undefined;
-  if (previousScreenshot) {
-    const previousResponse = await fetch(previousScreenshot.screenshotUrl);
-    const previousBuffer = Buffer.from(await previousResponse.arrayBuffer());
-    const comparison = await compareScreenshotsByRegion(previousBuffer, newScreenshotBuffer);
-    regionAnalysisResult = {
-      topThird: comparison.topThird,
-      middleThird: comparison.middleThird,
-      bottomThird: comparison.bottomThird,
-      analysis: comparison.analysis
-    };
-  }
-
-  // Update latest screenshot
-  await db.upsertScreenshot({
-    landingPageId,
-    screenshotUrl: newScreenshotUrl,
-    fileKey,
-    capturedAt: new Date(),
-  });
 
   // Record monitoring history
+  // 最新の履歴（監視実行時に作成される履歴）の場合は、差分がなくてもscreenshotUrlを保存する
   await db.createMonitoringHistory({
     landingPageId,
     checkType: "content_change",
@@ -450,14 +498,56 @@ export async function monitorLandingPage(landingPageId: number): Promise<{
     message: contentChanged 
       ? `コンテンツ変更を検出 (差分: ${diffPercentage.toFixed(2)}%)`
       : "変更なし",
-    screenshotUrl: newScreenshotUrl,
-    previousScreenshotUrl: previousScreenshot?.screenshotUrl,
+    screenshotUrl: newScreenshotUrl || undefined, // 最新の履歴なので常に保存
+    previousScreenshotUrl: contentChanged ? previousScreenshotUrl : undefined, // 差分があった場合のみ、以前の最新画像を保存
     diffImageUrl,
-    diffTopThird: regionAnalysisResult ? regionAnalysisResult.topThird.toFixed(2) : undefined,
-    diffMiddleThird: regionAnalysisResult ? regionAnalysisResult.middleThird.toFixed(2) : undefined,
-    diffBottomThird: regionAnalysisResult ? regionAnalysisResult.bottomThird.toFixed(2) : undefined,
+    diffTopThird: regionAnalysisResult ? regionAnalysisResult.firstView.toFixed(2) : undefined,
+    diffMiddleThird: regionAnalysisResult ? regionAnalysisResult.body.toFixed(2) : undefined,
+    diffBottomThird: undefined, // 廃止（互換性のため残す）
     regionAnalysis: regionAnalysisResult ? regionAnalysisResult.analysis : undefined,
   });
+  
+  // 以前の最新履歴の画像を削除（監視実行後、差分がない場合のみ）
+  if (previousLatestHistory.length > 0 && !contentChanged) {
+    const previousHistory = previousLatestHistory[0];
+    const imagesToDelete: string[] = [];
+    
+    // スクリーンショット画像を削除（差分がない場合のみ）
+    if (previousHistory.screenshotUrl && !previousHistory.previousScreenshotUrl && !previousHistory.diffImageUrl) {
+      const key = extractStorageKeyFromUrl(previousHistory.screenshotUrl);
+      if (key) {
+        imagesToDelete.push(key);
+      }
+    }
+    
+    // Storageから削除（差分がない場合の画像のみ削除）
+    if (imagesToDelete.length > 0) {
+      for (const key of imagesToDelete) {
+        try {
+          await storageDelete(key);
+          console.log(`[Monitoring] Deleted image from previous latest history: ${key}`);
+        } catch (error) {
+          console.error(`[Monitoring] Failed to delete image ${key}:`, error);
+        }
+      }
+      
+      // 監視履歴の画像URLをnullに更新
+      const dbInstance = await db.getDb();
+      if (dbInstance) {
+        const { monitoringHistory } = await import('../drizzle/schema');
+        const { eq } = await import('drizzle-orm');
+        await dbInstance
+          .update(monitoringHistory)
+          .set({ 
+            screenshotUrl: null,
+            previousScreenshotUrl: null,
+            diffImageUrl: null
+          })
+          .where(eq(monitoringHistory.id, previousHistory.id));
+        console.log(`[Monitoring] Updated previous latest history to remove image URLs`);
+      }
+    }
+  }
 
   let message = contentChanged 
     ? `コンテンツ変更を検出 (差分: ${diffPercentage.toFixed(2)}%)`

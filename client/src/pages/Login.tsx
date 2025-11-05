@@ -8,16 +8,30 @@ import { Loader2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { APP_LOGO, APP_TITLE } from "@/const";
+import GoogleSignInButton from "@/components/GoogleSignInButton";
 
 export default function Login() {
   const [, setLocation] = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const utils = trpc.useUtils();
 
   const loginMutation = trpc.auth.login.useMutation({
-    onSuccess: () => {
-      setLocation("/dashboard");
+    onSuccess: async () => {
+      // 認証状態のキャッシュを無効化して再取得
+      await utils.auth.me.invalidate();
+      // 認証状態を再取得してからリダイレクト
+      const result = await utils.auth.me.refetch();
+      if (result.data) {
+        // 認証状態が確認できたらリダイレクト
+        window.location.href = "/dashboard";
+      } else {
+        // 認証状態が確認できない場合は少し待ってからリダイレクト
+        setTimeout(() => {
+          window.location.href = "/dashboard";
+        }, 500);
+      }
     },
     onError: (error: any) => {
       setError(error.message);
@@ -46,7 +60,18 @@ export default function Login() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
-            {APP_LOGO && <img src={APP_LOGO} alt="Logo" className="h-12 w-12" />}
+            {APP_LOGO && (
+              <img
+                src={APP_LOGO}
+                alt="Logo"
+                className="h-12 w-12"
+                onError={(e) => {
+                  console.error("[Logo] Failed to load image:", APP_LOGO);
+                  // Fallback to placeholder if image fails to load
+                  e.currentTarget.src = "https://placehold.co/128x128/E1E7EF/1F2937?text=App";
+                }}
+              />
+            )}
           </div>
           <CardTitle className="text-2xl">{APP_TITLE}</CardTitle>
           <CardDescription>
@@ -99,6 +124,19 @@ export default function Login() {
                 "ログイン"
               )}
             </Button>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-white px-2 text-muted-foreground">
+                  または
+                </span>
+              </div>
+            </div>
+
+            <GoogleSignInButton />
 
             <div className="text-center text-sm">
               <span className="text-muted-foreground">アカウントをお持ちでないですか？ </span>

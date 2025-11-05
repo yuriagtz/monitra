@@ -7,6 +7,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { initializeScheduler } from "../scheduler";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -57,8 +58,44 @@ async function startServer() {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
 
-  server.listen(port, () => {
+  // Vercel Cron Jobs用のエンドポイント
+  app.get('/api/cron/schedule-check', async (req, res) => {
+    // Vercel Cronからのリクエストを検証
+    // CRON_SECRETが設定されている場合は認証が必要
+    if (process.env.CRON_SECRET) {
+      const authHeader = req.headers['authorization'];
+      const cronSecret = req.headers['x-cron-secret'] || req.query.secret;
+      
+      // Bearer トークンまたはクエリパラメータ/ヘッダーで認証
+      const isValid = 
+        authHeader === `Bearer ${process.env.CRON_SECRET}` ||
+        cronSecret === process.env.CRON_SECRET;
+      
+      if (!isValid) {
+        console.warn('[Cron] Unauthorized request to schedule-check endpoint');
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+    }
+    
+    try {
+      const { checkAndRunSchedules } = await import('../scheduler');
+      const result = await checkAndRunSchedules();
+      res.json({ success: true, ...result });
+    } catch (error) {
+      console.error('[Cron] Error executing schedule check:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  server.listen(port, async () => {
     console.log(`Server running on http://localhost:${port}/`);
+    // Vercel環境ではnode-cronをスキップ（Cron Jobsを使用）
+    if (!process.env.VERCEL) {
+      // Initialize scheduler after server starts (通常のNode.js環境のみ)
+      await initializeScheduler();
+    } else {
+      console.log('[Scheduler] Vercel environment detected, skipping node-cron initialization (using Vercel Cron Jobs)');
+    }
   });
 }
 

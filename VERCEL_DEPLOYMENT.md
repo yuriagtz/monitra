@@ -1,0 +1,80 @@
+# Vercelデプロイメントガイド
+
+## 環境変数の設定
+
+Vercelのダッシュボードで以下の環境変数を設定してください。
+
+### 必須環境変数
+
+- `DATABASE_URL`: データベース接続URL
+- `SUPABASE_URL`: SupabaseプロジェクトURL
+- `SUPABASE_ANON_KEY`: Supabase匿名キー
+- `SUPABASE_SERVICE_ROLE_KEY`: Supabaseサービスロールキー
+- `GOOGLE_CLIENT_ID`: Google OAuth クライアントID
+- `GOOGLE_CLIENT_SECRET`: Google OAuth クライアントシークレット
+
+### オプション環境変数
+
+- `CRON_SECRET`: Vercel Cronエンドポイントの認証用シークレット（推奨）
+  - 設定すると、`/api/cron/schedule-check`エンドポイントが保護されます
+  - ランダムな文字列を生成して設定してください（例: `openssl rand -hex 32`）
+  - 設定しない場合は、Vercelの内部ネットワークからのみアクセス可能です
+
+- `TZ`: タイムゾーン設定（デフォルト: `Asia/Tokyo`）
+  - スケジュール実行時のタイムゾーンを指定します
+  - 例: `Asia/Tokyo`, `America/New_York`, `Europe/London`
+  - タイムゾーン名の一覧: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+
+## Cron Jobsの設定
+
+`vercel.json`に以下の設定が含まれています：
+
+```json
+{
+  "crons": [
+    {
+      "path": "/api/cron/schedule-check",
+      "schedule": "0 * * * *"
+    }
+  ]
+}
+```
+
+これは毎時0分（UTC時間）に`/api/cron/schedule-check`を呼び出します。
+
+## タイムゾーンの考慮
+
+- Vercel Cron Jobsは**UTC時間**で実行されます
+- アプリケーションは`TZ`環境変数で指定されたタイムゾーン（デフォルト: `Asia/Tokyo`）で動作します
+- スケジュール設定の`executeHour`は、指定されたタイムゾーンのローカル時間で解釈されます
+
+### 例
+
+- `TZ=Asia/Tokyo`（デフォルト）の場合
+  - `executeHour=9`は、日本時間の9時（UTC時間では0時）に実行されます
+  - Vercel Cronは毎時0分（UTC）に実行されるため、日本時間の9時、10時、11時...に実行されます
+
+- `TZ=America/New_York`の場合
+  - `executeHour=9`は、東部時間の9時（UTC時間では14時または13時、サマータイムによる）に実行されます
+
+## デプロイ後の確認
+
+1. Vercelのダッシュボードで「Cron Jobs」セクションを確認
+2. `/api/cron/schedule-check`エンドポイントが正しく設定されているか確認
+3. スケジュール設定画面で「次回実行予定」が正しく表示されているか確認
+4. 実際にスケジュールが実行されるか確認
+
+## トラブルシューティング
+
+### Cronが実行されない場合
+
+1. Vercelのログを確認（「Functions」タブ → `/api/cron/schedule-check`）
+2. 環境変数が正しく設定されているか確認
+3. `CRON_SECRET`を設定している場合、認証が正しく行われているか確認
+
+### タイムゾーンが合わない場合
+
+1. `TZ`環境変数が正しく設定されているか確認
+2. スケジュール設定の`executeHour`が期待するタイムゾーンで解釈されているか確認
+3. ログでUTC時間とローカル時間の両方を確認
+

@@ -35,11 +35,29 @@ export default function Analytics() {
     pdf.save(`lp-analytics-report-${new Date().toISOString().split("T")[0]}.pdf`);
   };
   
-  const { data: lps } = trpc.lp.list.useQuery();
-  const { data: changeFrequency, isLoading: isLoadingFreq } = trpc.analytics.changeFrequency.useQuery();
-  const { data: changeTrend, isLoading: isLoadingTrend } = trpc.analytics.changeTrend.useQuery({
-    landingPageId: selectedLP === "all" ? undefined : parseInt(selectedLP),
+  const { data: lps } = trpc.lp.list.useQuery(undefined, {
+    staleTime: 1000 * 60 * 10,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
+  const { data: changeFrequency, isLoading: isLoadingFreq } = trpc.analytics.changeFrequency.useQuery(
+    undefined,
+    {
+      staleTime: 1000 * 60 * 5,
+      refetchOnWindowFocus: false,
+      refetchOnMount: false,
+    }
+  );
+  const { data: changeTrend, isLoading: isLoadingTrend } = trpc.analytics.changeTrend.useQuery(
+    {
+      landingPageId: selectedLP === "all" ? undefined : parseInt(selectedLP),
+    },
+    {
+      staleTime: 1000 * 60 * 5,
+      refetchOnWindowFocus: false,
+      refetchOnMount: false,
+    }
+  );
 
   return (
     <div className="space-y-6" id="analytics-report">
@@ -56,7 +74,7 @@ export default function Analytics() {
           </Button>
           
           <Select value={selectedLP} onValueChange={setSelectedLP}>
-          <SelectTrigger className="w-[250px]">
+          <SelectTrigger className="w-[250px] bg-white">
             <SelectValue placeholder="LPを選択" />
           </SelectTrigger>
           <SelectContent>

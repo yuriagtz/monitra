@@ -16,11 +16,12 @@ import Analytics from "./pages/Analytics";
 import Landing from "./pages/Landing";
 import Register from "./pages/Register";
 import Login from "./pages/Login";
+import AuthCallback from "./pages/AuthCallback";
 import { useAuth } from "./_core/hooks/useAuth";
 import { Loader2 } from "lucide-react";
 
 function ProtectedRoutes() {
-  const { user, loading } = useAuth();
+  const { user, loading, refresh } = useAuth();
 
   if (loading) {
     return (
@@ -31,12 +32,14 @@ function ProtectedRoutes() {
   }
 
   // If not authenticated, show landing page
+  // But allow access to auth routes (login, register, callback)
   if (!user) {
     return (
       <Switch>
         <Route path="/" component={Landing} />
         <Route path="/register" component={Register} />
         <Route path="/login" component={Login} />
+        <Route path="/auth/callback" component={AuthCallback} />
         <Route component={Landing} />
       </Switch>
     );

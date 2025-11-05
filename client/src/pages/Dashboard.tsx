@@ -3,8 +3,20 @@ import { trpc } from "@/lib/trpc";
 import { Activity, AlertTriangle, CheckCircle2, FileText } from "lucide-react";
 
 export default function Dashboard() {
-  const { data: landingPages, isLoading: lpLoading } = trpc.lp.list.useQuery();
-  const { data: recentHistory } = trpc.monitoring.recent.useQuery({ limit: 10 });
+  const { data: landingPages, isLoading: lpLoading } = trpc.lp.list.useQuery(undefined, {
+    staleTime: 1000 * 60 * 10, // 10分間キャッシュ
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+  });
+  const { data: recentHistory } = trpc.monitoring.recent.useQuery(
+    { limit: 10 },
+    {
+      staleTime: 0, // キャッシュを使わずに常に最新を取得
+      refetchOnWindowFocus: true, // ウィンドウフォーカス時に再取得
+      refetchOnMount: true, // マウント時に再取得
+      refetchInterval: 30000, // 30秒ごとに自動更新
+    }
+  );
 
   // 統計情報の計算
   const totalLPs = landingPages?.length || 0;
@@ -23,7 +35,7 @@ export default function Dashboard() {
 
       {/* サマリーカード */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 hover:shadow-lg transition-all duration-300">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">登録LP数</CardTitle>
             <FileText className="h-4 w-4 text-muted-foreground" />
@@ -36,7 +48,7 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-gradient-to-br from-green-50 to-emerald-100/50 hover:shadow-lg transition-all duration-300">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">正常</CardTitle>
             <CheckCircle2 className="h-4 w-4 text-green-600" />
@@ -49,7 +61,7 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-gradient-to-br from-orange-50 to-amber-100/50 hover:shadow-lg transition-all duration-300">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">変更検出</CardTitle>
             <Activity className="h-4 w-4 text-orange-600" />
@@ -62,7 +74,7 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-gradient-to-br from-red-50 to-rose-100/50 hover:shadow-lg transition-all duration-300">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">エラー</CardTitle>
             <AlertTriangle className="h-4 w-4 text-red-600" />

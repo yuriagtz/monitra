@@ -5,8 +5,8 @@ import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import * as db from "./db";
 import { getDb } from "./db";
-import { users } from "../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { users, monitoringHistory } from "../drizzle/schema";
+import { eq, inArray, desc } from "drizzle-orm";
 import { monitorLandingPage } from "./monitoring";
 import bcrypt from 'bcrypt';
 
@@ -22,38 +22,144 @@ export const appRouter = router({
         password: z.string().min(8),
       }))
       .mutation(async ({ ctx, input }) => {
+        // Check if Supabase is configured
+        if (!ctx.supabase) {
+          throw new Error('認証システムが設定されていません。Supabaseの環境変数を確認してください。');
+        }
+
         const database = await getDb();
         if (!database) throw new Error('Database not available');
 
-        // Check if user already exists
-        const existing = await database.select().from(users).where(eq(users.email, input.email)).limit(1);
-        if (existing.length > 0) {
-          throw new Error('このメールアドレスはすでに登録されています');
+        // Check if user already exists in our database
+        // Note: We'll also rely on Supabase Auth to catch duplicate emails
+        try {
+          const existing = await database.select().from(users).where(eq(users.email, input.email)).limit(1);
+          if (existing.length > 0) {
+            throw new Error('このメールアドレスはすでに登録されています');
+          }
+        } catch (dbError: any) {
+          console.error("[Auth] Database query error when checking existing user:", dbError);
+          console.error("[Auth] Error details:", {
+            message: dbError.message,
+            code: dbError.code,
+            detail: dbError.detail,
+            constraint: dbError.constraint,
+          });
+          // If it's a duplicate email error, show a user-friendly message
+          if (dbError.code === '23505' || dbError.message?.includes('already exists') || dbError.message?.includes('duplicate') || dbError.message?.includes('unique')) {
+            throw new Error('このメールアドレスはすでに登録されています');
+          }
+          // If it's our custom error, re-throw it
+          if (dbError.message === 'このメールアドレスはすでに登録されています') {
+            throw dbError;
+          }
+          // For other database errors, show the actual error for debugging
+          throw new Error(`データベースエラー: ${dbError.message || '不明なエラーが発生しました'}`);
         }
 
-        // Hash password
-        const hashedPassword = await bcrypt.hash(input.password, 10);
+        try {
+          // Register with Supabase Auth
+          // Note: emailRedirectTo is only needed if email confirmation is enabled
+          // If email confirmation is disabled, signUp will return a session directly
+          const { data: authData, error: authError } = await ctx.supabase.auth.signUp({
+            email: input.email,
+            password: input.password,
+            options: {
+              data: {
+                name: input.name,
+              },
+              // Only set emailRedirectTo if email confirmation is enabled
+              // For now, we'll let Supabase use default behavior
+            },
+          });
 
-        // Create user with a temporary openId (email-based)
-        const openId = `local_${input.email}_${Date.now()}`;
-        await database.insert(users).values({
-          openId,
-          name: input.name,
-          email: input.email,
-          password: hashedPassword,
-          loginMethod: 'local',
-          role: 'user',
-        });
+          if (authError) {
+            console.error("[Auth] Supabase signUp error:", authError);
+            // Check if user already exists in Supabase Auth
+            if (authError.message?.includes('already registered') || 
+                authError.message?.includes('already exists') ||
+                authError.message?.includes('User already registered')) {
+              throw new Error('このメールアドレスはすでに登録されています');
+            }
+            throw new Error(authError.message || '登録に失敗しました');
+          }
 
-        // Get the created user
-        const [newUser] = await database.select().from(users).where(eq(users.email, input.email)).limit(1);
+          if (!authData.user) {
+            throw new Error('ユーザーの作成に失敗しました');
+          }
 
-        // Set session cookie
-        const token = Buffer.from(JSON.stringify({ userId: newUser.id, openId: newUser.openId })).toString('base64');
-        const cookieOptions = getSessionCookieOptions(ctx.req);
-        ctx.res.cookie(COOKIE_NAME, token, cookieOptions);
+          // Create user in our database
+          const openId = `supabase_${authData.user.id}`;
+          try {
+            await database.insert(users).values({
+              openId,
+              name: input.name,
+              email: input.email,
+              loginMethod: 'supabase',
+              role: 'user',
+            });
+          } catch (insertError: any) {
+            console.error("[Auth] Database insert error:", insertError);
+            console.error("[Auth] Insert error details:", {
+              message: insertError.message,
+              code: insertError.code,
+              detail: insertError.detail,
+              constraint: insertError.constraint,
+            });
+            
+            // Check if it's a duplicate key error (user already exists)
+            if (insertError.code === '23505' || insertError.message?.includes('duplicate') || insertError.message?.includes('unique')) {
+              throw new Error('このメールアドレスはすでに登録されています');
+            }
+            
+            // Re-throw with more details
+            throw new Error(`ユーザーの作成に失敗しました: ${insertError.message || '不明なエラー'}`);
+          }
 
-        return { success: true, user: newUser };
+          // After signup, immediately sign in to create a session
+          // This ensures the user is logged in after registration
+          if (authData.session) {
+            // Session was created immediately (email confirmation disabled)
+            // The session cookies are already set by the Supabase client
+            const [newUser] = await database.select().from(users).where(eq(users.email, input.email)).limit(1);
+            if (!newUser) {
+              throw new Error('ユーザー情報の取得に失敗しました');
+            }
+            return { success: true, user: newUser, session: authData.session };
+          } else {
+            // Email confirmation is required, sign in after confirmation
+            // For now, we'll try to sign in immediately
+            const { data: signInData, error: signInError } = await ctx.supabase.auth.signInWithPassword({
+              email: input.email,
+              password: input.password,
+            });
+
+            if (signInError) {
+              console.warn("[Auth] Auto sign-in after registration failed:", signInError);
+              // Registration succeeded but auto sign-in failed
+              // User will need to confirm email or sign in manually
+              const [newUser] = await database.select().from(users).where(eq(users.email, input.email)).limit(1);
+              if (!newUser) {
+                throw new Error('ユーザー情報の取得に失敗しました');
+              }
+              return { 
+                success: true, 
+                user: newUser, 
+                requiresEmailConfirmation: true 
+              };
+            }
+
+            // Get the created user
+            const [newUser] = await database.select().from(users).where(eq(users.email, input.email)).limit(1);
+            if (!newUser) {
+              throw new Error('ユーザー情報の取得に失敗しました');
+            }
+            return { success: true, user: newUser, session: signInData.session };
+          }
+        } catch (error: any) {
+          console.error("[Auth] Registration error:", error);
+          throw new Error(error.message || '登録に失敗しました');
+        }
       }),
     login: publicProcedure
       .input(z.object({
@@ -61,32 +167,64 @@ export const appRouter = router({
         password: z.string(),
       }))
       .mutation(async ({ ctx, input }) => {
+        // Check if Supabase is configured
+        if (!ctx.supabase) {
+          throw new Error('認証システムが設定されていません。Supabaseの環境変数を確認してください。');
+        }
+
         const database = await getDb();
         if (!database) throw new Error('Database not available');
 
-        // Find user by email
-        const [user] = await database.select().from(users).where(eq(users.email, input.email)).limit(1);
-        if (!user || !user.password) {
-          throw new Error('メールアドレスまたはパスワードが正しくありません');
+        try {
+          // Login with Supabase Auth
+          const { data: authData, error: authError } = await ctx.supabase.auth.signInWithPassword({
+            email: input.email,
+            password: input.password,
+          });
+
+          if (authError) {
+            console.error("[Auth] Supabase signIn error:", authError);
+            throw new Error(authError.message || 'メールアドレスまたはパスワードが正しくありません');
+          }
+
+          if (!authData.user) {
+            throw new Error('ログインに失敗しました');
+          }
+
+          // Find or create user in our database
+          let [user] = await database.select().from(users).where(eq(users.email, input.email)).limit(1);
+          
+          if (!user) {
+            // Create user in our database if doesn't exist
+            const openId = `supabase_${authData.user.id}`;
+            await database.insert(users).values({
+              openId,
+              name: authData.user.user_metadata?.name || input.email,
+              email: input.email,
+              loginMethod: 'supabase',
+              role: 'user',
+            });
+            const result = await database.select().from(users).where(eq(users.email, input.email)).limit(1);
+            if (result.length === 0) {
+              throw new Error('ユーザー情報の取得に失敗しました');
+            }
+            user = result[0];
+          } else {
+            // Update last signed in
+            await database.update(users)
+              .set({ lastSignedIn: new Date() })
+              .where(eq(users.id, user.id));
+            const result = await database.select().from(users).where(eq(users.id, user.id)).limit(1);
+            if (result.length > 0) {
+              user = result[0];
+            }
+          }
+
+          return { success: true, user };
+        } catch (error: any) {
+          console.error("[Auth] Login error:", error);
+          throw new Error(error.message || 'ログインに失敗しました');
         }
-
-        // Verify password
-        const isValid = await bcrypt.compare(input.password, user.password);
-        if (!isValid) {
-          throw new Error('メールアドレスまたはパスワードが正しくありません');
-        }
-
-        // Update last signed in
-        await database.update(users)
-          .set({ lastSignedIn: new Date() })
-          .where(eq(users.id, user.id));
-
-        // Set session cookie
-        const token = Buffer.from(JSON.stringify({ userId: user.id, openId: user.openId })).toString('base64');
-        const cookieOptions = getSessionCookieOptions(ctx.req);
-        ctx.res.cookie(COOKIE_NAME, token, cookieOptions);
-
-        return { success: true, user };
       }),
     updateProfile: protectedProcedure
       .input(z.object({
@@ -141,9 +279,14 @@ export const appRouter = router({
 
         return { success: true };
       }),
-    logout: publicProcedure.mutation(({ ctx }) => {
+    logout: publicProcedure.mutation(async ({ ctx }) => {
+      // Sign out from Supabase
+      await ctx.supabase.auth.signOut();
+      
+      // Also clear any legacy cookies
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+      
       return {
         success: true,
       } as const;
@@ -158,15 +301,63 @@ export const appRouter = router({
     create: protectedProcedure
       .input(z.object({
         url: z.string().url(),
-        title: z.string().optional(),
+        title: z.string().min(1, "タイトルは必須です"),
         description: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        // プランの制限をチェック
+        const { PLAN_CONFIG } = await import('./_core/plan');
+        const userPlan = (ctx.user.plan as "free" | "light" | "pro") || "free";
+        const maxLpCount = PLAN_CONFIG[userPlan].maxLpCount;
+        
+        // 現在のLP数を取得
+        const currentLps = await db.getLandingPagesByUserId(ctx.user.id);
+        const currentLpCount = currentLps.length;
+        
+        // プラン制限をチェック
+        if (maxLpCount !== null && currentLpCount >= maxLpCount) {
+          throw new Error(`${PLAN_CONFIG[userPlan].name}では、最大${maxLpCount}ページまで登録できます。プランをアップグレードしてください。`);
+        }
+        
+        // タイトルが空文字列の場合は「無題」に設定
+        const title = input.title.trim() || "無題";
+        
         const id = await db.createLandingPage({
           ...input,
+          title,
           userId: ctx.user.id,
         });
+        
+        // 登録後、即座に監視を実行して初期状態を登録
+        // 非同期で実行（エラーはログに記録するが、登録処理は成功とする）
+        monitorLandingPage(id).catch((error) => {
+          console.error(`[LP Create] Failed to run initial monitoring for LP ${id}:`, error);
+        });
+        
         return { id };
+      }),
+    
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        url: z.string().url().optional(),
+        title: z.string().min(1, "タイトルは必須です").optional(),
+        description: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { id, ...updateData } = input;
+        const lp = await db.getLandingPageById(id);
+        if (!lp || lp.userId !== ctx.user.id) {
+          throw new Error("Not found or unauthorized");
+        }
+        
+        // タイトルが空文字列や未定義の場合は「無題」に設定
+        if (updateData.title !== undefined && (!updateData.title || updateData.title.trim() === "")) {
+          updateData.title = "無題";
+        }
+        
+        await db.updateLandingPage(id, updateData);
+        return { success: true };
       }),
     
     delete: protectedProcedure
@@ -188,13 +379,68 @@ export const appRouter = router({
           throw new Error("Not found or unauthorized");
         }
         
-        // Import monitoring function
-        const { monitorLandingPage } = await import("./monitoring");
+        // 監視を実行して完了を待つ（タイムアウト: 2分）
+        try {
+          const result = await Promise.race([
+            monitorLandingPage(lp.id),
+            new Promise<never>((_, reject) => {
+              setTimeout(() => reject(new Error("監視がタイムアウトしました（2分）")), 120000);
+            }),
+          ]);
+          
+          return {
+            success: true,
+            result: {
+              contentChanged: result.contentChanged,
+              linkBroken: result.linkBroken,
+              message: result.message,
+            },
+          };
+        } catch (error: any) {
+          // タイムアウトまたはエラーの場合でも、バックグラウンドで実行を続ける
+          console.error(`[LP Monitor] Monitoring error for LP ${lp.id}:`, error);
+          
+          // 非同期で再試行（エラーはログのみ）
+          monitorLandingPage(lp.id).catch((err) => {
+            console.error(`[LP Monitor] Background monitoring failed for LP ${lp.id}:`, err);
+          });
+          
+          throw new Error(error.message || "監視の実行中にエラーが発生しました");
+        }
+      }),
+    
+    monitorAll: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        // ユーザーが所有するすべてのLPを取得
+        const allLPs = await db.getLandingPagesByUserId(ctx.user.id);
         
-        // Run monitoring asynchronously
-        monitorLandingPage(lp.id).catch(console.error);
+        if (allLPs.length === 0) {
+          throw new Error("監視対象のLPがありません");
+        }
         
-        return { success: true };
+        // すべてのLPをバックグラウンドで監視実行（非同期）
+        // 注意: 完了を待たずに即座にレスポンスを返す（クライアント側でポーリング）
+        const monitoringPromises = allLPs.map((lp) => {
+          return monitorLandingPage(lp.id).catch((error) => {
+            console.error(`[LP Monitor All] Failed to monitor LP ${lp.id} (${lp.url}):`, error);
+            return null; // エラーがあっても他のLPの監視は続行
+          });
+        });
+        
+        // 非同期で実行開始（完了は待たない）
+        Promise.all(monitoringPromises).then((results) => {
+          const successCount = results.filter(r => r !== null).length;
+          const errorCount = results.filter(r => r === null).length;
+          console.log(`[LP Monitor All] Completed monitoring for ${allLPs.length} LP(s): ${successCount} success, ${errorCount} errors`);
+        }).catch((error) => {
+          console.error("[LP Monitor All] Error in batch monitoring:", error);
+        });
+        
+        return {
+          success: true,
+          message: `${allLPs.length}件のLPの監視を開始しました`,
+          count: allLPs.length,
+        };
       }),
   }),
   
@@ -403,9 +649,26 @@ export const appRouter = router({
   monitoring: router({
     recent: protectedProcedure
       .input(z.object({ limit: z.number().optional() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         const limit = input.limit || 10;
-        return await db.getRecentMonitoringHistory(limit);
+        // ユーザーが所有するLPのIDを取得
+        const userLPs = await db.getLandingPagesByUserId(ctx.user.id);
+        const userLpIds = userLPs.map((lp) => lp.id);
+        
+        if (userLpIds.length === 0) {
+          return [];
+        }
+        
+        // ユーザーが所有するLPの監視履歴のみを取得
+        const dbInstance = await getDb();
+        if (!dbInstance) return [];
+        
+        return await dbInstance
+          .select()
+          .from(monitoringHistory)
+          .where(inArray(monitoringHistory.landingPageId, userLpIds))
+          .orderBy(desc(monitoringHistory.createdAt))
+          .limit(limit);
       }),
     
     history: protectedProcedure
@@ -428,67 +691,278 @@ export const appRouter = router({
   }),
   
   schedules: router({
-    list: protectedProcedure.query(async () => {
-      return await db.getAllScheduleSettings();
+    list: protectedProcedure.query(async ({ ctx }) => {
+      // 現在のユーザーのスケジュール設定を返す（配列形式で返す互換性のため）
+      const schedule = await db.getScheduleSettingsByUserId(ctx.user.id);
+      return schedule ? [schedule] : [];
     }),
     
     get: protectedProcedure
-      .input(z.object({ landingPageId: z.number() }))
-      .query(async ({ input }) => {
-        return await db.getScheduleSettings(input.landingPageId);
+      .query(async ({ ctx }) => {
+        const schedule = await db.getScheduleSettingsByUserId(ctx.user.id);
+        if (!schedule) return null;
+        
+        // プランに応じた最小監視間隔をチェック
+        const { getMinIntervalDays } = await import('./_core/plan');
+        const userPlan = (ctx.user.plan as "free" | "light" | "pro") || "free";
+        const minIntervalDays = getMinIntervalDays(userPlan);
+        
+        // 現在の間隔が最小間隔より小さい場合は自動調整
+        if (schedule.intervalDays < minIntervalDays) {
+          const excludedIdsJson = schedule.excludedLandingPageIds;
+          const excludedIds = excludedIdsJson ? JSON.parse(excludedIdsJson) as number[] : [];
+          
+          // 自動的に最小間隔に更新
+          const id = await db.upsertScheduleSettings(ctx.user.id, {
+            intervalDays: minIntervalDays,
+            enabled: schedule.enabled,
+            excludedLandingPageIds: excludedIdsJson,
+          });
+          
+          // スケジューラーを再起動
+          const { startSchedule } = await import('./scheduler');
+          await startSchedule(id);
+          
+          // 更新後のスケジュールを返す
+          const updatedSchedule = await db.getScheduleSettingsByUserId(ctx.user.id);
+          return updatedSchedule || schedule;
+        }
+        
+        return schedule;
       }),
     
     upsert: protectedProcedure
       .input(z.object({
-        landingPageId: z.number(),
-        scheduleType: z.enum(["interval", "cron"]),
-        intervalMinutes: z.number().optional(),
-        cronExpression: z.string().optional(),
+        intervalDays: z.number().min(1, "監視間隔は1日以上である必要があります"),
+        executeHour: z.number().min(0).max(23).optional(),
         enabled: z.boolean().optional(),
+        excludedLandingPageIds: z.array(z.number()).optional(),
       }))
-      .mutation(async ({ input }) => {
-        const { landingPageId, enabled, ...settings } = input;
-        const id = await db.upsertScheduleSettings(landingPageId, {
-          ...settings,
-          enabled: enabled !== undefined ? (enabled ? 1 : 0) : undefined,
+      .mutation(async ({ ctx, input }) => {
+        // プランのバリデーションと自動調整
+        const { validateIntervalDays, getMinIntervalDays } = await import('./_core/plan');
+        // planが存在しない場合はデフォルトで'free'を使用
+        const userPlan = (ctx.user.plan as "free" | "light" | "pro") || "free";
+        const minIntervalDays = getMinIntervalDays(userPlan);
+        
+        // 指定された間隔が最小間隔より小さい場合は自動調整
+        let adjustedIntervalDays = input.intervalDays;
+        if (adjustedIntervalDays < minIntervalDays) {
+          adjustedIntervalDays = minIntervalDays;
+        }
+        
+        const validation = validateIntervalDays(userPlan, adjustedIntervalDays);
+        
+        if (!validation.valid) {
+          throw new Error(validation.error);
+        }
+        
+        // 除外LPのIDリストをJSON文字列に変換
+        const excludedIdsJson = input.excludedLandingPageIds 
+          ? JSON.stringify(input.excludedLandingPageIds)
+          : null;
+        
+        const { enabled } = input;
+        const isEnabled = enabled !== undefined ? enabled : true; // デフォルトは有効
+        
+        // 次回実行予定日時を計算（新規作成時または次回実行予定がない場合、または間隔/実行時間が変更された場合）
+        const existingSchedule = await db.getScheduleSettingsByUserId(ctx.user.id);
+        let nextRunAt: Date | undefined = undefined;
+        
+        const now = new Date();
+        const newExecuteHour = input.executeHour ?? existingSchedule?.executeHour ?? 9;
+        const shouldUpdateNextRunAt = !existingSchedule || 
+                                       !existingSchedule.nextRunAt || 
+                                       existingSchedule.intervalDays !== adjustedIntervalDays ||
+                                       (existingSchedule?.executeHour ?? 9) !== newExecuteHour;
+        
+        if (shouldUpdateNextRunAt) {
+          nextRunAt = new Date(now);
+          
+          // 最終実行日を確認
+          const lastRunAt = existingSchedule?.lastRunAt ? new Date(existingSchedule.lastRunAt) : null;
+          
+          const executeHour = newExecuteHour;
+          
+          if (!lastRunAt) {
+            // 一度も実行されていない場合
+            nextRunAt.setHours(executeHour, 0, 0, 0);
+            // 実行時刻が既に過ぎている場合は明日に設定
+            if (nextRunAt.getTime() <= now.getTime()) {
+              nextRunAt.setDate(nextRunAt.getDate() + 1);
+            }
+            // 実行時刻が今日の時刻より後で、まだ過ぎていない場合は当日のまま
+          } else {
+            // 最終実行日から監視間隔を計算
+            const daysSinceLastRun = Math.floor((now.getTime() - lastRunAt.getTime()) / (1000 * 60 * 60 * 24));
+            
+            if (daysSinceLastRun >= adjustedIntervalDays) {
+              // 監視間隔以上経過している場合は、次回実行を詰める
+              nextRunAt.setHours(executeHour, 0, 0, 0);
+              // 実行時刻が既に過ぎている場合は明日に設定
+              if (nextRunAt.getTime() <= now.getTime()) {
+                nextRunAt.setDate(nextRunAt.getDate() + 1);
+              }
+              // 実行時刻が今日の時刻より後で、まだ過ぎていない場合は当日のまま
+            } else {
+              // まだ間隔が経過していない場合は、最終実行日 + 間隔日数後の指定時刻に設定
+              nextRunAt = new Date(lastRunAt);
+              nextRunAt.setDate(nextRunAt.getDate() + adjustedIntervalDays);
+              nextRunAt.setHours(executeHour, 0, 0, 0);
+            }
+          }
+        }
+        
+        const id = await db.upsertScheduleSettings(ctx.user.id, {
+          intervalDays: adjustedIntervalDays,
+          executeHour: input.executeHour ?? existingSchedule?.executeHour ?? 9,
+          enabled: isEnabled,
+          excludedLandingPageIds: excludedIdsJson,
+          ...(nextRunAt && { nextRunAt }), // nextRunAtが計算された場合のみ設定
         });
         
         // Import scheduler dynamically to avoid circular dependency
         const { startSchedule } = await import('./scheduler');
-        if (enabled) {
+        // 有効な場合はスケジュールを開始（既存のスケジュールも再起動）
+        if (isEnabled) {
           await startSchedule(id);
         }
         
-        return { success: true, id };
+        // 更新後のスケジュールを取得して返す
+        const updatedSchedule = await db.getScheduleSettingsByUserId(ctx.user.id);
+        
+        return { 
+          success: true, 
+          id, 
+          adjustedIntervalDays: adjustedIntervalDays !== input.intervalDays ? adjustedIntervalDays : undefined,
+          schedule: updatedSchedule,
+        };
       }),
     
     delete: protectedProcedure
-      .input(z.object({ landingPageId: z.number() }))
-      .mutation(async ({ input }) => {
-        const schedule = await db.getScheduleSettings(input.landingPageId);
+      .mutation(async ({ ctx }) => {
+        const schedule = await db.getScheduleSettingsByUserId(ctx.user.id);
         if (schedule) {
           const { stopSchedule } = await import('./scheduler');
           stopSchedule(schedule.id);
         }
         
-        await db.deleteScheduleSettings(input.landingPageId);
+        await db.deleteScheduleSettings(ctx.user.id);
         return { success: true };
       }),
     
     start: protectedProcedure
-      .input(z.object({ scheduleId: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx }) => {
+        const schedule = await db.getScheduleSettingsByUserId(ctx.user.id);
+        if (!schedule) {
+          throw new Error("スケジュール設定が見つかりません");
+        }
+        
+        // 次回実行予定日時を設定（まだ設定されていない場合）
+        let nextRunAt: Date | undefined = undefined;
+        if (!schedule.nextRunAt) {
+          const now = new Date();
+          
+          // 最終実行日を確認
+          const lastRunAt = schedule.lastRunAt ? new Date(schedule.lastRunAt) : null;
+          
+          const executeHour = schedule.executeHour ?? 9;
+          
+          if (!lastRunAt) {
+            // 一度も実行されていない場合
+            nextRunAt = new Date(now);
+            nextRunAt.setHours(executeHour, 0, 0, 0);
+            // 実行時刻が既に過ぎている場合は明日に設定
+            if (nextRunAt.getTime() <= now.getTime()) {
+              nextRunAt.setDate(nextRunAt.getDate() + 1);
+            }
+            // 実行時刻が今日の時刻より後で、まだ過ぎていない場合は当日のまま
+          } else {
+            // 最終実行日から監視間隔を計算
+            const daysSinceLastRun = Math.floor((now.getTime() - lastRunAt.getTime()) / (1000 * 60 * 60 * 24));
+            
+            if (daysSinceLastRun >= schedule.intervalDays) {
+              // 監視間隔以上経過している場合は、次回実行を詰める
+              nextRunAt = new Date(now);
+              nextRunAt.setHours(executeHour, 0, 0, 0);
+              // 実行時刻が既に過ぎている場合は明日に設定
+              if (nextRunAt.getTime() <= now.getTime()) {
+                nextRunAt.setDate(nextRunAt.getDate() + 1);
+              }
+              // 実行時刻が今日の時刻より後で、まだ過ぎていない場合は当日のまま
+            } else {
+              // まだ間隔が経過していない場合は、最終実行日 + 間隔日数後の指定時刻に設定
+              nextRunAt = new Date(lastRunAt);
+              nextRunAt.setDate(nextRunAt.getDate() + schedule.intervalDays);
+              nextRunAt.setHours(executeHour, 0, 0, 0);
+            }
+          }
+        }
+        
+        // データベースのenabledフィールドをtrueに更新
+        const id = await db.upsertScheduleSettings(ctx.user.id, {
+          enabled: true,
+          ...(nextRunAt && { nextRunAt }), // nextRunAtが計算された場合のみ設定
+        });
+        
         const { startSchedule } = await import('./scheduler');
-        await startSchedule(input.scheduleId);
+        // 更新後のIDを使用してスケジュールを開始
+        await startSchedule(id);
         return { success: true };
       }),
     
     stop: protectedProcedure
-      .input(z.object({ scheduleId: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx }) => {
+        const schedule = await db.getScheduleSettingsByUserId(ctx.user.id);
+        if (!schedule) {
+          throw new Error("スケジュール設定が見つかりません");
+        }
+        
+        // データベースのenabledフィールドをfalseに更新
+        await db.upsertScheduleSettings(ctx.user.id, {
+          enabled: false,
+        });
+        
         const { stopSchedule } = await import('./scheduler');
-        stopSchedule(input.scheduleId);
+        stopSchedule(schedule.id);
         return { success: true };
+      }),
+    
+    // 検証用リセット（前回実行日を削除し、次回実行予定を設定）
+    reset: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        const schedule = await db.getScheduleSettingsByUserId(ctx.user.id);
+        if (!schedule) {
+          throw new Error("スケジュール設定が見つかりません");
+        }
+        
+        const dbInstance = await getDb();
+        if (!dbInstance) {
+          throw new Error("データベースに接続できません");
+        }
+        
+        const { scheduleSettings } = await import('../drizzle/schema');
+        const { eq } = await import('drizzle-orm');
+        
+        // 次回実行予定を2025/11/8 18:00に設定
+        const nextRunAt = new Date('2025-11-08T18:00:00');
+        
+        await dbInstance.update(scheduleSettings)
+          .set({ 
+            lastRunAt: null,
+            nextRunAt
+          })
+          .where(eq(scheduleSettings.id, schedule.id));
+        
+        // スケジューラーを再起動して新しいnextRunAtを反映
+        const { startSchedule } = await import('./scheduler');
+        await startSchedule(schedule.id);
+        
+        return { 
+          success: true, 
+          message: "スケジュールをリセットしました",
+          nextRunAt: nextRunAt.toISOString()
+        };
       }),
   }),
   
@@ -505,13 +979,16 @@ export const appRouter = router({
         const results = [];
         for (const lp of input.lps) {
           try {
+            // タイトルが空の場合は「無題」に設定
+            const title = (lp.title && lp.title.trim() !== "") ? lp.title : "無題";
+            
             const id = await db.createLandingPage({
               userId: ctx.user.id,
-              title: lp.title,
+              title,
               url: lp.url,
               description: lp.description || '',
             });
-            results.push({ success: true, id, title: lp.title });
+            results.push({ success: true, id, title });
           } catch (error) {
             results.push({ success: false, title: lp.title, error: String(error) });
           }

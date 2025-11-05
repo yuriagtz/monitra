@@ -91,7 +91,7 @@ export default function Notifications() {
       </div>
 
       {/* Email Notifications */}
-      <Card>
+      <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -121,6 +121,7 @@ export default function Notifications() {
                 onChange={(e) =>
                   setFormData({ ...formData, emailAddress: e.target.value })
                 }
+                className="bg-white"
               />
             </div>
             <Button
@@ -128,6 +129,7 @@ export default function Notifications() {
               size="sm"
               onClick={() => handleTest('email')}
               disabled={!formData.emailAddress || testNotification.isPending}
+              className="bg-white"
             >
               <Send className="w-4 h-4 mr-2" />
               テスト送信
@@ -137,7 +139,7 @@ export default function Notifications() {
       </Card>
 
       {/* Slack Notifications */}
-      <Card>
+      <Card className="bg-gradient-to-br from-purple-50 to-purple-100/50">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -167,6 +169,7 @@ export default function Notifications() {
                 onChange={(e) =>
                   setFormData({ ...formData, slackWebhookUrl: e.target.value })
                 }
+                className="bg-white"
               />
             </div>
             <Button
@@ -174,6 +177,7 @@ export default function Notifications() {
               size="sm"
               onClick={() => handleTest('slack')}
               disabled={!formData.slackWebhookUrl || testNotification.isPending}
+              className="bg-white"
             >
               <Send className="w-4 h-4 mr-2" />
               テスト送信
@@ -183,7 +187,7 @@ export default function Notifications() {
       </Card>
 
       {/* Discord Notifications */}
-      <Card>
+      <Card className="bg-gradient-to-br from-indigo-50 to-indigo-100/50">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -213,6 +217,7 @@ export default function Notifications() {
                 onChange={(e) =>
                   setFormData({ ...formData, discordWebhookUrl: e.target.value })
                 }
+                className="bg-white"
               />
             </div>
             <Button
@@ -220,6 +225,7 @@ export default function Notifications() {
               size="sm"
               onClick={() => handleTest('discord')}
               disabled={!formData.discordWebhookUrl || testNotification.isPending}
+              className="bg-white"
             >
               <Send className="w-4 h-4 mr-2" />
               テスト送信
@@ -229,7 +235,7 @@ export default function Notifications() {
       </Card>
 
       {/* Chatwork Notifications */}
-      <Card>
+      <Card className="bg-gradient-to-br from-orange-50 to-orange-100/50">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -259,6 +265,7 @@ export default function Notifications() {
                 onChange={(e) =>
                   setFormData({ ...formData, chatworkApiToken: e.target.value })
                 }
+                className="bg-white"
               />
             </div>
             <div className="space-y-2">
@@ -270,6 +277,7 @@ export default function Notifications() {
                 onChange={(e) =>
                   setFormData({ ...formData, chatworkRoomId: e.target.value })
                 }
+                className="bg-white"
               />
             </div>
             <Button
@@ -277,6 +285,7 @@ export default function Notifications() {
               size="sm"
               onClick={() => handleTest('chatwork')}
               disabled={!formData.chatworkApiToken || !formData.chatworkRoomId || testNotification.isPending}
+              className="bg-white"
             >
               <Send className="w-4 h-4 mr-2" />
               テスト送信

@@ -14,10 +14,19 @@ interface LPTagSelectorProps {
 }
 
 export function LPTagSelector({ landingPageId }: LPTagSelectorProps) {
-  const { data: allTags } = trpc.tags.list.useQuery();
-  const { data: lpTags, refetch } = trpc.tags.getForLandingPage.useQuery({
-    landingPageId,
+  const { data: allTags } = trpc.tags.list.useQuery(undefined, {
+    staleTime: 1000 * 60 * 10, // 10分間キャッシュ
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
+  const { data: lpTags, refetch } = trpc.tags.getForLandingPage.useQuery(
+    { landingPageId },
+    {
+      staleTime: 1000 * 60 * 5, // 5分間キャッシュ
+      refetchOnWindowFocus: false,
+      refetchOnMount: false,
+    }
+  );
 
   const addTag = trpc.tags.addToLandingPage.useMutation({
     onSuccess: () => {

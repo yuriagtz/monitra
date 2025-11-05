@@ -51,9 +51,6 @@ export default function Landing() {
             <Button size="lg" className="text-lg px-8 py-6" onClick={() => setLocation("/register")}>
               今すぐ無料で始める
             </Button>
-            <Button size="lg" variant="outline" className="text-lg px-8 py-6" onClick={() => setLocation("/login")}>
-              ログイン
-            </Button>
           </div>
           <p className="text-sm text-gray-500">クレジットカード不要 • 無料プランあり</p>
         </div>
@@ -148,13 +145,13 @@ export default function Landing() {
       <section className="container mx-auto px-4 py-20 bg-gray-50">
         <div className="text-center mb-12">
           <h2 className="text-3xl md:text-4xl font-bold mb-4">シンプルな料金プラン</h2>
-          <p className="text-lg text-gray-600">まずは無料プランでお試しください</p>
+          <p className="text-lg text-gray-600">まずはフリープランでお試しください</p>
         </div>
         <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
           {/* Free Plan */}
           <Card className="border-2">
             <CardHeader>
-              <CardTitle className="text-2xl">無料プラン</CardTitle>
+              <CardTitle className="text-2xl">フリープラン</CardTitle>
               <div className="text-4xl font-bold mt-4">¥0</div>
               <CardDescription className="text-base mt-2">個人利用・お試しに最適</CardDescription>
             </CardHeader>
@@ -166,7 +163,7 @@ export default function Landing() {
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
-                  <span>1日1回の自動チェック</span>
+                  <span>3日ごとの自動チェック</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
@@ -179,6 +176,41 @@ export default function Landing() {
               </ul>
               <Button className="w-full mt-6" variant="outline" onClick={() => setLocation("/register")}>
                 無料で始める
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Light Plan */}
+          <Card className="border-2">
+            <CardHeader>
+              <CardTitle className="text-2xl">ライトプラン</CardTitle>
+              <div className="text-4xl font-bold mt-4">
+                ¥980
+                <span className="text-lg font-normal text-gray-600">/月</span>
+              </div>
+              <CardDescription className="text-base mt-2">小規模ビジネスに最適</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-3">
+                <li className="flex items-center gap-2">
+                  <Check className="w-5 h-5 text-green-600" />
+                  <span>最大15ページまで監視</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-5 h-5 text-green-600" />
+                  <span>3日ごとの自動チェック</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-5 h-5 text-green-600" />
+                  <span>メール通知</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-5 h-5 text-green-600" />
+                  <span>90日間の履歴保存</span>
+                </li>
+              </ul>
+              <Button className="w-full mt-6" variant="outline" onClick={() => setLocation("/register")}>
+                ライトプランを始める
               </Button>
             </CardContent>
           </Card>
@@ -200,11 +232,11 @@ export default function Landing() {
               <ul className="space-y-3">
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
-                  <span>最大30ページまで監視</span>
+                  <span>無制限のページ監視</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
-                  <span>1時間ごとの自動チェック</span>
+                  <span>1日ごとの自動チェック</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
@@ -225,46 +257,6 @@ export default function Landing() {
               </ul>
               <Button className="w-full mt-6" onClick={() => setLocation("/register")}>
                 プロプランを始める
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Enterprise Plan */}
-          <Card className="border-2">
-            <CardHeader>
-              <CardTitle className="text-2xl">エンタープライズ</CardTitle>
-              <div className="text-4xl font-bold mt-4">お問い合わせ</div>
-              <CardDescription className="text-base mt-2">大規模運用・カスタマイズ対応</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-3">
-                <li className="flex items-center gap-2">
-                  <Check className="w-5 h-5 text-green-600" />
-                  <span>無制限のページ監視</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-5 h-5 text-green-600" />
-                  <span>カスタム監視頻度</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-5 h-5 text-green-600" />
-                  <span>専用サーバー対応</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-5 h-5 text-green-600" />
-                  <span>API連携</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-5 h-5 text-green-600" />
-                  <span>専任サポート</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-5 h-5 text-green-600" />
-                  <span>SLA保証</span>
-                </li>
-              </ul>
-              <Button className="w-full mt-6" variant="outline">
-                お問い合わせ
               </Button>
             </CardContent>
           </Card>

@@ -8,6 +8,8 @@ import { Loader2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { APP_LOGO, APP_TITLE } from "@/const";
+import GoogleSignInButton from "@/components/GoogleSignInButton";
+import { createClient } from "@/lib/supabase";
 
 export default function Register() {
   const [, setLocation] = useLocation();
@@ -17,9 +19,64 @@ export default function Register() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
 
+  const utils = trpc.useUtils();
+  const supabase = createClient();
+  
   const registerMutation = trpc.auth.register.useMutation({
-    onSuccess: () => {
-      setLocation("/dashboard");
+    onSuccess: async (data) => {
+      // If email confirmation is required, show message
+      if (data.requiresEmailConfirmation) {
+        setError("登録に成功しました。メールを確認してログインしてください。");
+        setTimeout(() => {
+          setLocation("/login");
+        }, 3000);
+        return;
+      }
+
+      // After server-side registration, sign in on client side to ensure session is set
+      try {
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email: email,
+          password: password,
+        });
+
+        if (signInError) {
+          console.error("[Auth] Client-side sign-in after registration failed:", signInError);
+          setError("登録は成功しましたが、自動ログインに失敗しました。ログインページからログインしてください。");
+          setTimeout(() => {
+            setLocation("/login");
+          }, 3000);
+          return;
+        }
+
+        if (!signInData.session) {
+          setError("登録は成功しましたが、セッションの作成に失敗しました。ログインページからログインしてください。");
+          setTimeout(() => {
+            setLocation("/login");
+          }, 3000);
+          return;
+        }
+
+        // Invalidate and refetch auth state to update the UI
+        await utils.auth.me.invalidate();
+        // 認証状態を再取得してからリダイレクト
+        const result = await utils.auth.me.refetch();
+        if (result.data) {
+          // 認証状態が確認できたらリダイレクト
+          window.location.href = "/dashboard";
+        } else {
+          // 認証状態が確認できない場合は少し待ってからリダイレクト
+          setTimeout(() => {
+            window.location.href = "/dashboard";
+          }, 500);
+        }
+      } catch (err: any) {
+        console.error("[Auth] Error during post-registration sign-in:", err);
+        setError("登録は成功しましたが、ログイン処理中にエラーが発生しました。ログインページからログインしてください。");
+        setTimeout(() => {
+          setLocation("/login");
+        }, 3000);
+      }
     },
     onError: (error: any) => {
       setError(error.message);
@@ -135,6 +192,19 @@ export default function Register() {
                 "アカウントを作成"
               )}
             </Button>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-white px-2 text-muted-foreground">
+                  または
+                </span>
+              </div>
+            </div>
+
+            <GoogleSignInButton />
 
             <div className="text-center text-sm">
               <span className="text-muted-foreground">すでにアカウントをお持ちですか？ </span>
