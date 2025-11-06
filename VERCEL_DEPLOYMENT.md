@@ -7,6 +7,7 @@ Vercel プロジェクト設定で以下を指定してください。
 - Install Command: `pnpm install`
 - Build Command: `pnpm run build`
 - Output Directory: `dist/public`
+- Functions Runtime: Project Settings > Functions で Node.js 20 を選択（未設定の場合は `NODE_VERSION=20` を環境変数に追加）
 
 `pnpm run build` は以下を実行します。
 
@@ -44,14 +45,10 @@ Vercelのダッシュボードで以下の環境変数を設定してくださ�
 
 ```json
 {
-  "version": 3,
-  "functions": {
-    "dist/index.js": {
-      "runtime": "nodejs20.x",
-      "memory": 1024,
-      "maxDuration": 60
-    }
-  },
+  "version": 2,
+  "builds": [
+    { "src": "dist/index.js", "use": "@vercel/node" }
+  ],
   "routes": [
     { "src": "/api/cron/schedule-check", "dest": "/dist/index.js" },
     { "src": "/api/(.*)", "dest": "/dist/index.js" },
