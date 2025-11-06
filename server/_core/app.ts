@@ -4,7 +4,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
-import { serveStatic, setupVite } from "./vite";
+import { serveStatic } from "./static";
 
 type CreateAppOptions = {
   server?: Server;
@@ -51,6 +51,7 @@ export async function createApp(options: CreateAppOptions = {}) {
   });
 
   if (process.env.NODE_ENV === "development" && options.server) {
+    const { setupVite } = await import("./vite");
     await setupVite(app, options.server);
   } else {
     serveStatic(app);
