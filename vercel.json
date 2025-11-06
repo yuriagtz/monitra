@@ -2,19 +2,16 @@
   "version": 2,
   "installCommand": "pnpm install --frozen-lockfile",
   "buildCommand": "pnpm run build",
-  "builds": [
-    {
-      "src": "dist/index.js",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": ["dist/public/**"]
-      }
+  "functions": {
+    "api/index.ts": {
+      "runtime": "nodejs20.x",
+      "includeFiles": ["dist/public/**"]
     }
-  ],
+  },
   "routes": [
-    { "src": "/api/cron/schedule-check", "dest": "/dist/index.js" },
-    { "src": "/api/(.*)", "dest": "/dist/index.js" },
-    { "src": "/(.*)", "dest": "/dist/index.js" }
+    { "src": "/api/cron/schedule-check", "dest": "/api/index" },
+    { "src": "/api/(.*)", "dest": "/api/index" },
+    { "src": "/(.*)", "dest": "/api/index" }
   ],
   "crons": [
     {
