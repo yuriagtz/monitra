@@ -1,7 +1,13 @@
 {
   "version": 2,
   "builds": [
-    { "src": "dist/index.js", "use": "@vercel/node" }
+    {
+      "src": "dist/index.js",
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": ["dist/public/**"]
+      }
+    }
   ],
   "routes": [
     { "src": "/api/cron/schedule-check", "dest": "/dist/index.js" },
