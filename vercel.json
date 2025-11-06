@@ -4,7 +4,7 @@
   "buildCommand": "pnpm run build",
   "functions": {
     "api/index.ts": {
-      "includeFiles": "dist/public/**"
+      "includeFiles": "dist/**"
     }
   },
   "routes": [
