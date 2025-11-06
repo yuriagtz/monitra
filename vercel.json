@@ -1,4 +1,17 @@
 {
+  "version": 3,
+  "functions": {
+    "dist/index.js": {
+      "runtime": "nodejs20.x",
+      "memory": 1024,
+      "maxDuration": 60
+    }
+  },
+  "routes": [
+    { "src": "/api/cron/schedule-check", "dest": "/dist/index.js" },
+    { "src": "/api/(.*)", "dest": "/dist/index.js" },
+    { "src": "/(.*)", "dest": "/dist/index.js" }
+  ],
   "crons": [
     {
       "path": "/api/cron/schedule-check",

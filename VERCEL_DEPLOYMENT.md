@@ -1,5 +1,18 @@
 # Vercelデプロイメントガイド
 
+## ビルド設定
+
+Vercel プロジェクト設定で以下を指定してください。
+
+- Install Command: `pnpm install`
+- Build Command: `pnpm run build`
+- Output Directory: `dist/public`
+
+`pnpm run build` は以下を実行します。
+
+1. `vite build` → `dist/public/` にフロントエンドを出力
+2. `esbuild` → `dist/index.js` にExpressサーバー（サーバーレスハンドラー）をバンドル
+
 ## 環境変数の設定
 
 Vercelのダッシュボードで以下の環境変数を設定してください。
@@ -25,12 +38,25 @@ Vercelのダッシュボードで以下の環境変数を設定してくださ�
   - 例: `Asia/Tokyo`, `America/New_York`, `Europe/London`
   - タイムゾーン名の一覧: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
 
-## Cron Jobsの設定
+## ルーティングとCron設定
 
-`vercel.json`に以下の設定が含まれています：
+`vercel.json` にはサーバーレスハンドラーとCron設定が含まれています。
 
 ```json
 {
+  "version": 3,
+  "functions": {
+    "dist/index.js": {
+      "runtime": "nodejs20.x",
+      "memory": 1024,
+      "maxDuration": 60
+    }
+  },
+  "routes": [
+    { "src": "/api/cron/schedule-check", "dest": "/dist/index.js" },
+    { "src": "/api/(.*)", "dest": "/dist/index.js" },
+    { "src": "/(.*)", "dest": "/dist/index.js" }
+  ],
   "crons": [
     {
       "path": "/api/cron/schedule-check",
@@ -40,7 +66,8 @@ Vercelのダッシュボードで以下の環境変数を設定してくださ�
 }
 ```
 
-これは毎時0分（UTC時間）に`/api/cron/schedule-check`を呼び出します。
+- すべてのAPIリクエストとページリクエストは `dist/index.js` にルーティングされ、Expressが処理します。
+- Cron Jobは毎時0分（UTC）に `/api/cron/schedule-check` を呼び出します。
 
 ## タイムゾーンの考慮
 
@@ -59,7 +86,7 @@ Vercelのダッシュボードで以下の環境変数を設定してくださ�
 
 ## デプロイ後の確認
 
-1. Vercelのダッシュボードで「Cron Jobs」セクションを確認
+1. Vercelのダッシュボードで「Functions」と「Cron Jobs」セクションを確認
 2. `/api/cron/schedule-check`エンドポイントが正しく設定されているか確認
 3. スケジュール設定画面で「次回実行予定」が正しく表示されているか確認
 4. 実際にスケジュールが実行されるか確認
