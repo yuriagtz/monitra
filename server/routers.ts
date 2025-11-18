@@ -10,6 +10,91 @@ import { eq, inArray, desc } from "drizzle-orm";
 import { monitorLandingPage, monitorCreative } from "./monitoring";
 import bcrypt from 'bcrypt';
 
+// タイムゾーンを考慮してnextRunAtを計算するヘルパー関数
+// executeHourは日本時間（JST）として解釈し、UTC時刻として返す
+function calculateNextRunAt(executeHour: number, baseDate?: Date, intervalDays?: number, lastRunAt?: Date | null): Date {
+  const timezone = 'Asia/Tokyo';
+  const nowUTC = baseDate || new Date();
+  
+  // 現在時刻を日本時間（JST）で取得
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+  
+  const nowParts = formatter.formatToParts(nowUTC);
+  const nowJSTYear = parseInt(nowParts.find(p => p.type === 'year')!.value);
+  const nowJSTMonth = parseInt(nowParts.find(p => p.type === 'month')!.value) - 1;
+  const nowJSTDay = parseInt(nowParts.find(p => p.type === 'day')!.value);
+  const nowJSTHour = parseInt(nowParts.find(p => p.type === 'hour')!.value);
+  const nowJSTMinute = parseInt(nowParts.find(p => p.type === 'minute')!.value);
+  const nowJSTSecond = parseInt(nowParts.find(p => p.type === 'second')!.value);
+  
+  let nextRunAtJST: Date;
+  
+  if (lastRunAt && intervalDays) {
+    // 最終実行日を日本時間（JST）で取得
+    const lastRunParts = formatter.formatToParts(lastRunAt);
+    const lastRunJSTYear = parseInt(lastRunParts.find(p => p.type === 'year')!.value);
+    const lastRunJSTMonth = parseInt(lastRunParts.find(p => p.type === 'month')!.value) - 1;
+    const lastRunJSTDay = parseInt(lastRunParts.find(p => p.type === 'day')!.value);
+    
+    // 日本時間での経過日数を計算（年月日のみで比較）
+    const nowJSTDate = new Date(nowJSTYear, nowJSTMonth, nowJSTDay);
+    const lastRunJSTDate = new Date(lastRunJSTYear, lastRunJSTMonth, lastRunJSTDay);
+    const daysSinceLastRun = Math.floor((nowJSTDate.getTime() - lastRunJSTDate.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (daysSinceLastRun >= intervalDays) {
+      // 監視間隔以上経過している場合は、今日の指定時刻に設定
+      let nextJSTYear = nowJSTYear;
+      let nextJSTMonth = nowJSTMonth;
+      let nextJSTDay = nowJSTDay;
+      
+      // 実行時刻が既に過ぎている場合は明日に設定
+      if (executeHour < nowJSTHour || (executeHour === nowJSTHour && 0 < nowJSTMinute)) {
+        const tomorrow = new Date(nowJSTYear, nowJSTMonth, nowJSTDay);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        nextJSTYear = tomorrow.getFullYear();
+        nextJSTMonth = tomorrow.getMonth();
+        nextJSTDay = tomorrow.getDate();
+      }
+      
+      // 日本時間での次回実行予定時刻をUTC時刻として構築（JST→UTC変換：-9時間）
+      return new Date(Date.UTC(nextJSTYear, nextJSTMonth, nextJSTDay, executeHour - 9, 0, 0));
+    } else {
+      // まだ間隔が経過していない場合は、最終実行日 + 間隔日数後の指定時刻に設定
+      const targetDate = new Date(lastRunJSTYear, lastRunJSTMonth, lastRunJSTDay);
+      targetDate.setDate(targetDate.getDate() + intervalDays);
+      
+      // 日本時間での次回実行予定時刻をUTC時刻として構築（JST→UTC変換：-9時間）
+      return new Date(Date.UTC(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), executeHour - 9, 0, 0));
+    }
+  } else {
+    // 一度も実行されていない場合
+    let nextJSTYear = nowJSTYear;
+    let nextJSTMonth = nowJSTMonth;
+    let nextJSTDay = nowJSTDay;
+    
+    // 実行時刻が既に過ぎている場合は明日に設定
+    if (executeHour < nowJSTHour || (executeHour === nowJSTHour && 0 < nowJSTMinute)) {
+      const tomorrow = new Date(nowJSTYear, nowJSTMonth, nowJSTDay);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      nextJSTYear = tomorrow.getFullYear();
+      nextJSTMonth = tomorrow.getMonth();
+      nextJSTDay = tomorrow.getDate();
+    }
+    
+    // 日本時間での次回実行予定時刻をUTC時刻として構築（JST→UTC変換：-9時間）
+    return new Date(Date.UTC(nextJSTYear, nextJSTMonth, nextJSTDay, executeHour - 9, 0, 0));
+  }
+}
+
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
@@ -1156,40 +1241,11 @@ export const appRouter = router({
                                        (existingSchedule?.executeHour ?? 9) !== newExecuteHour;
         
         if (shouldUpdateNextRunAt) {
-          nextRunAt = new Date(now);
-          
           // 最終実行日を確認
           const lastRunAt = existingSchedule?.lastRunAt ? new Date(existingSchedule.lastRunAt) : null;
           
-          const executeHour = newExecuteHour;
-          
-          if (!lastRunAt) {
-            // 一度も実行されていない場合
-            nextRunAt.setHours(executeHour, 0, 0, 0);
-            // 実行時刻が既に過ぎている場合は明日に設定
-            if (nextRunAt.getTime() <= now.getTime()) {
-              nextRunAt.setDate(nextRunAt.getDate() + 1);
-            }
-            // 実行時刻が今日の時刻より後で、まだ過ぎていない場合は当日のまま
-          } else {
-            // 最終実行日から監視間隔を計算
-            const daysSinceLastRun = Math.floor((now.getTime() - lastRunAt.getTime()) / (1000 * 60 * 60 * 24));
-            
-            if (daysSinceLastRun >= adjustedIntervalDays) {
-              // 監視間隔以上経過している場合は、次回実行を詰める
-              nextRunAt.setHours(executeHour, 0, 0, 0);
-              // 実行時刻が既に過ぎている場合は明日に設定
-              if (nextRunAt.getTime() <= now.getTime()) {
-                nextRunAt.setDate(nextRunAt.getDate() + 1);
-              }
-              // 実行時刻が今日の時刻より後で、まだ過ぎていない場合は当日のまま
-            } else {
-              // まだ間隔が経過していない場合は、最終実行日 + 間隔日数後の指定時刻に設定
-              nextRunAt = new Date(lastRunAt);
-              nextRunAt.setDate(nextRunAt.getDate() + adjustedIntervalDays);
-              nextRunAt.setHours(executeHour, 0, 0, 0);
-            }
-          }
+          // タイムゾーンを考慮してnextRunAtを計算（executeHourは日本時間として解釈）
+          nextRunAt = calculateNextRunAt(newExecuteHour, now, adjustedIntervalDays, lastRunAt);
         }
         
         const id = await db.upsertScheduleSettings(ctx.user.id, {
@@ -1241,41 +1297,11 @@ export const appRouter = router({
         let nextRunAt: Date | undefined = undefined;
         if (!schedule.nextRunAt) {
           const now = new Date();
-          
-          // 最終実行日を確認
           const lastRunAt = schedule.lastRunAt ? new Date(schedule.lastRunAt) : null;
-          
           const executeHour = schedule.executeHour ?? 9;
           
-          if (!lastRunAt) {
-            // 一度も実行されていない場合
-            nextRunAt = new Date(now);
-            nextRunAt.setHours(executeHour, 0, 0, 0);
-            // 実行時刻が既に過ぎている場合は明日に設定
-            if (nextRunAt.getTime() <= now.getTime()) {
-              nextRunAt.setDate(nextRunAt.getDate() + 1);
-            }
-            // 実行時刻が今日の時刻より後で、まだ過ぎていない場合は当日のまま
-          } else {
-            // 最終実行日から監視間隔を計算
-            const daysSinceLastRun = Math.floor((now.getTime() - lastRunAt.getTime()) / (1000 * 60 * 60 * 24));
-            
-            if (daysSinceLastRun >= schedule.intervalDays) {
-              // 監視間隔以上経過している場合は、次回実行を詰める
-              nextRunAt = new Date(now);
-              nextRunAt.setHours(executeHour, 0, 0, 0);
-              // 実行時刻が既に過ぎている場合は明日に設定
-              if (nextRunAt.getTime() <= now.getTime()) {
-                nextRunAt.setDate(nextRunAt.getDate() + 1);
-              }
-              // 実行時刻が今日の時刻より後で、まだ過ぎていない場合は当日のまま
-            } else {
-              // まだ間隔が経過していない場合は、最終実行日 + 間隔日数後の指定時刻に設定
-              nextRunAt = new Date(lastRunAt);
-              nextRunAt.setDate(nextRunAt.getDate() + schedule.intervalDays);
-              nextRunAt.setHours(executeHour, 0, 0, 0);
-            }
-          }
+          // タイムゾーンを考慮してnextRunAtを計算（executeHourは日本時間として解釈）
+          nextRunAt = calculateNextRunAt(executeHour, now, schedule.intervalDays, lastRunAt);
         }
         
         // データベースのenabledフィールドをtrueに更新
@@ -1471,40 +1497,11 @@ export const appRouter = router({
                                        (existingSchedule?.executeHour ?? 9) !== newExecuteHour;
         
         if (shouldUpdateNextRunAt) {
-          nextRunAt = new Date(now);
-          
           // 最終実行日を確認
           const lastRunAt = existingSchedule?.lastRunAt ? new Date(existingSchedule.lastRunAt) : null;
           
-          const executeHour = newExecuteHour;
-          
-          if (!lastRunAt) {
-            // 一度も実行されていない場合
-            nextRunAt.setHours(executeHour, 0, 0, 0);
-            // 実行時刻が既に過ぎている場合は明日に設定
-            if (nextRunAt.getTime() <= now.getTime()) {
-              nextRunAt.setDate(nextRunAt.getDate() + 1);
-            }
-            // 実行時刻が今日の時刻より後で、まだ過ぎていない場合は当日のまま
-          } else {
-            // 最終実行日から監視間隔を計算
-            const daysSinceLastRun = Math.floor((now.getTime() - lastRunAt.getTime()) / (1000 * 60 * 60 * 24));
-            
-            if (daysSinceLastRun >= adjustedIntervalDays) {
-              // 監視間隔以上経過している場合は、次回実行を詰める
-              nextRunAt.setHours(executeHour, 0, 0, 0);
-              // 実行時刻が既に過ぎている場合は明日に設定
-              if (nextRunAt.getTime() <= now.getTime()) {
-                nextRunAt.setDate(nextRunAt.getDate() + 1);
-              }
-              // 実行時刻が今日の時刻より後で、まだ過ぎていない場合は当日のまま
-            } else {
-              // まだ間隔が経過していない場合は、最終実行日 + 間隔日数後の指定時刻に設定
-              nextRunAt = new Date(lastRunAt);
-              nextRunAt.setDate(nextRunAt.getDate() + adjustedIntervalDays);
-              nextRunAt.setHours(executeHour, 0, 0, 0);
-            }
-          }
+          // タイムゾーンを考慮してnextRunAtを計算（executeHourは日本時間として解釈）
+          nextRunAt = calculateNextRunAt(newExecuteHour, now, adjustedIntervalDays, lastRunAt);
         }
         
         const id = await db.upsertCreativeScheduleSettings(ctx.user.id, {
@@ -1556,41 +1553,11 @@ export const appRouter = router({
         let nextRunAt: Date | undefined = undefined;
         if (!schedule.nextRunAt) {
           const now = new Date();
-          
-          // 最終実行日を確認
           const lastRunAt = schedule.lastRunAt ? new Date(schedule.lastRunAt) : null;
-          
           const executeHour = schedule.executeHour ?? 9;
           
-          if (!lastRunAt) {
-            // 一度も実行されていない場合
-            nextRunAt = new Date(now);
-            nextRunAt.setHours(executeHour, 0, 0, 0);
-            // 実行時刻が既に過ぎている場合は明日に設定
-            if (nextRunAt.getTime() <= now.getTime()) {
-              nextRunAt.setDate(nextRunAt.getDate() + 1);
-            }
-            // 実行時刻が今日の時刻より後で、まだ過ぎていない場合は当日のまま
-          } else {
-            // 最終実行日から監視間隔を計算
-            const daysSinceLastRun = Math.floor((now.getTime() - lastRunAt.getTime()) / (1000 * 60 * 60 * 24));
-            
-            if (daysSinceLastRun >= schedule.intervalDays) {
-              // 監視間隔以上経過している場合は、次回実行を詰める
-              nextRunAt = new Date(now);
-              nextRunAt.setHours(executeHour, 0, 0, 0);
-              // 実行時刻が既に過ぎている場合は明日に設定
-              if (nextRunAt.getTime() <= now.getTime()) {
-                nextRunAt.setDate(nextRunAt.getDate() + 1);
-              }
-              // 実行時刻が今日の時刻より後で、まだ過ぎていない場合は当日のまま
-            } else {
-              // まだ間隔が経過していない場合は、最終実行日 + 間隔日数後の指定時刻に設定
-              nextRunAt = new Date(lastRunAt);
-              nextRunAt.setDate(nextRunAt.getDate() + schedule.intervalDays);
-              nextRunAt.setHours(executeHour, 0, 0, 0);
-            }
-          }
+          // タイムゾーンを考慮してnextRunAtを計算（executeHourは日本時間として解釈）
+          nextRunAt = calculateNextRunAt(executeHour, now, schedule.intervalDays, lastRunAt);
         }
         
         // データベースのenabledフィールドをtrueに更新
