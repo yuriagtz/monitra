@@ -722,11 +722,6 @@ export async function checkAndRunSchedules() {
     const scheduleId = schedule.id;
     const executeHour = schedule.executeHour ?? 9;
     
-    // 実行時刻が一致しない場合はスキップ（毎時0分に実行されることを想定）
-    if (currentHour !== executeHour || currentMinute !== 0) {
-      continue;
-    }
-    
     // nextRunAtをローカル時間として解釈
     // データベースにはUTC時間で保存されているが、ローカル時間として扱う
     let nextRunAtLocal: Date | null = null;
@@ -761,6 +756,22 @@ export async function checkAndRunSchedules() {
       const minutesDiff = Math.floor(timeDiff / 1000 / 60);
       console.log(`[Scheduler] Schedule ${scheduleId}: nextRunAt is in the future (${minutesDiff} minutes later), skipping`);
       continue;
+    }
+    
+    // nextRunAtが設定されていない場合、実行時刻が一致しない場合はスキップ
+    // 実行時刻が一致しなくても、nextRunAtが過ぎている場合は実行する（Cronジョブの実行遅延を考慮）
+    if (!nextRunAtLocal && (currentHour !== executeHour || currentMinute > 5)) {
+      console.log(`[Scheduler] Schedule ${scheduleId}: execution hour doesn't match (current: ${currentHour}:${currentMinute.toString().padStart(2, '0')}, executeHour: ${executeHour}), skipping`);
+      continue;
+    }
+    
+    // nextRunAtが設定されているが、実行時刻が大きく外れている場合（±1時間以上）はスキップ
+    if (nextRunAtLocal) {
+      const hourDiff = Math.abs(currentHour - executeHour);
+      if (hourDiff > 1 && hourDiff < 23) {
+        console.log(`[Scheduler] Schedule ${scheduleId}: execution hour is too far from executeHour (current: ${currentHour}:${currentMinute.toString().padStart(2, '0')}, executeHour: ${executeHour}), skipping`);
+        continue;
+      }
     }
     
     // 既に実行中の場合はスキップ
@@ -882,11 +893,6 @@ export async function checkAndRunSchedules() {
     const scheduleId = schedule.id;
     const executeHour = schedule.executeHour ?? 9;
     
-    // 実行時刻が一致しない場合はスキップ（毎時0分に実行されることを想定）
-    if (currentHour !== executeHour || currentMinute !== 0) {
-      continue;
-    }
-    
     // nextRunAtをローカル時間として解釈
     // データベースにはUTC時間で保存されているが、ローカル時間として扱う
     let nextRunAtLocal: Date | null = null;
@@ -921,6 +927,22 @@ export async function checkAndRunSchedules() {
       const minutesDiff = Math.floor(timeDiff / 1000 / 60);
       console.log(`[Scheduler] Creative schedule ${scheduleId}: nextRunAt is in the future (${minutesDiff} minutes later), skipping`);
       continue;
+    }
+    
+    // nextRunAtが設定されていない場合、実行時刻が一致しない場合はスキップ
+    // 実行時刻が一致しなくても、nextRunAtが過ぎている場合は実行する（Cronジョブの実行遅延を考慮）
+    if (!nextRunAtLocal && (currentHour !== executeHour || currentMinute > 5)) {
+      console.log(`[Scheduler] Creative schedule ${scheduleId}: execution hour doesn't match (current: ${currentHour}:${currentMinute.toString().padStart(2, '0')}, executeHour: ${executeHour}), skipping`);
+      continue;
+    }
+    
+    // nextRunAtが設定されているが、実行時刻が大きく外れている場合（±1時間以上）はスキップ
+    if (nextRunAtLocal) {
+      const hourDiff = Math.abs(currentHour - executeHour);
+      if (hourDiff > 1 && hourDiff < 23) {
+        console.log(`[Scheduler] Creative schedule ${scheduleId}: execution hour is too far from executeHour (current: ${currentHour}:${currentMinute.toString().padStart(2, '0')}, executeHour: ${executeHour}), skipping`);
+        continue;
+      }
     }
     
     // 既に実行中の場合はスキップ
