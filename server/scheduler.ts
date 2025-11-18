@@ -649,10 +649,18 @@ export async function stopAllSchedules() {
  * タイムゾーンを考慮してローカル時間を取得する
  */
 function getLocalTime(timezone: string = 'Asia/Tokyo'): Date {
+  // タイムゾーン値を検証（不正な値の場合はデフォルト値を使用）
+  let validTimezone = timezone || 'Asia/Tokyo';
+  // 先頭にコロンがある場合や空文字の場合、デフォルト値を使用
+  if (!validTimezone || validTimezone.startsWith(':') || validTimezone.trim() === '') {
+    console.warn(`[Scheduler] Invalid timezone "${timezone}", using default "Asia/Tokyo"`);
+    validTimezone = 'Asia/Tokyo';
+  }
+  
   const now = new Date();
   // タイムゾーンを考慮してローカル時間を取得
   const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
+    timeZone: validTimezone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -690,7 +698,12 @@ export async function checkAndRunSchedules() {
   }
   
   // タイムゾーン設定（環境変数から取得、デフォルトはAsia/Tokyo）
-  const timezone = process.env.TZ || 'Asia/Tokyo';
+  // process.env.TZが不正な値（例：:UTC）の場合、デフォルト値を使用
+  let timezone = process.env.TZ || 'Asia/Tokyo';
+  if (!timezone || timezone.startsWith(':') || timezone.trim() === '') {
+    console.warn(`[Scheduler] Invalid TZ environment variable "${process.env.TZ}", using default "Asia/Tokyo"`);
+    timezone = 'Asia/Tokyo';
+  }
   const nowUTC = new Date();
   const nowLocal = getLocalTime(timezone);
   const currentHour = nowLocal.getHours();
