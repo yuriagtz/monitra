@@ -69,8 +69,10 @@ export function serveStatic(app: Express) {
     const filePath = path.resolve(distPath, normalizedPath);
     
     // パストラバーサル攻撃を防ぐため、distPath内であることを確認
-    if (!filePath.startsWith(distPath)) {
-      console.warn(`[Static] Invalid path attempt: ${filePath}`);
+    const resolvedDistPath = path.resolve(distPath);
+    const resolvedFilePath = path.resolve(filePath);
+    if (!resolvedFilePath.startsWith(resolvedDistPath)) {
+      console.warn(`[Static] Invalid path attempt: ${req.path} -> ${filePath} (distPath: ${resolvedDistPath})`);
       return next();
     }
     
@@ -105,11 +107,30 @@ export function serveStatic(app: Express) {
         
         return res.sendFile(filePath);
       }
+    } else {
+      // ファイルが見つからない場合、デバッグ情報を出力
+      console.warn(`[Static] File not found: ${req.path}`);
+      console.warn(`[Static] Resolved path: ${filePath}`);
+      console.warn(`[Static] distPath: ${distPath}`);
+      console.warn(`[Static] normalizedPath: ${normalizedPath}`);
+      
+      // ディレクトリが存在するか確認
+      const dirPath = path.dirname(filePath);
+      if (fs.existsSync(dirPath)) {
+        try {
+          const files = fs.readdirSync(dirPath);
+          console.warn(`[Static] Files in directory ${dirPath}: ${files.join(", ")}`);
+        } catch (e) {
+          console.warn(`[Static] Error reading directory: ${e}`);
+        }
+      } else {
+        console.warn(`[Static] Directory does not exist: ${dirPath}`);
+      }
     }
     
     // 静的ファイル拡張子のリクエストでファイルが見つからない場合は404
     if (isStaticFile) {
-      console.warn(`[Static] File not found: ${req.path} (resolved: ${filePath})`);
+      console.warn(`[Static] File not found (404): ${req.path} (resolved: ${filePath})`);
       return res.status(404).send('File not found');
     }
     
