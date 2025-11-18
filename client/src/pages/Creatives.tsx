@@ -1402,10 +1402,13 @@ export default function Creatives() {
                           );
                           
                           if (restrictionMessage) {
+                            // disabledなButtonに対してTooltipを表示するため、spanでラップ
                             return (
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  {button}
+                                  <span className="inline-flex">
+                                    {button}
+                                  </span>
                                 </TooltipTrigger>
                                 <TooltipContent>
                                   <p>{restrictionMessage}</p>
