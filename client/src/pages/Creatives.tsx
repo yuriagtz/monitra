@@ -144,7 +144,7 @@ export default function Creatives() {
     trpc.creativeSchedules.upsert.useMutation();
 
   // 最近の監視履歴（ステータス・最終変更日・未変更期間のため）
-  const { data: recentCreativeHistory } =
+  const { data: recentCreativeHistory, isLoading: isRecentCreativeHistoryLoading } =
     trpc.monitoring.creativeRecent.useQuery(
       {
         limit: creatives?.length
@@ -152,6 +152,7 @@ export default function Creatives() {
           : 100,
       },
       {
+        enabled: !!creatives && !isLoading, // creativesが読み込まれてから実行
         staleTime: 0,
         refetchOnWindowFocus: true,
         refetchOnMount: true,
@@ -1169,6 +1170,13 @@ export default function Creatives() {
                     {/* ステータス */}
                     <TableCell className="text-center">
                       {(() => {
+                        if (isRecentCreativeHistoryLoading) {
+                          return (
+                            <span className="text-sm text-muted-foreground">
+                              読み込み中...
+                            </span>
+                          );
+                        }
                         const status = creativeStatusMap.get(creative.id);
                         if (!status) {
                           return (

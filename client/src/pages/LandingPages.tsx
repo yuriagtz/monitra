@@ -110,9 +110,10 @@ export default function LandingPages() {
 
   // 各LPの最新監視履歴を取得（LP数分の履歴を取得）
   // limitを十分に大きくして、すべてのLPの最新履歴を取得できるようにする
-  const { data: recentHistory } = trpc.monitoring.recent.useQuery(
+  const { data: recentHistory, isLoading: isRecentHistoryLoading } = trpc.monitoring.recent.useQuery(
     { limit: landingPages?.length ? Math.max(landingPages.length * 10, 100) : 100 },
     {
+      enabled: !!landingPages && !isLoading, // landingPagesが読み込まれてから実行
       staleTime: 0, // キャッシュを使わずに常に最新を取得
       refetchOnWindowFocus: true, // ウィンドウフォーカス時に再取得
       refetchOnMount: true, // マウント時に再取得
