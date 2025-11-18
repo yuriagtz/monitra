@@ -830,8 +830,8 @@ export default function LandingPages() {
                       value={quotaData.maxCount > 0 ? ((quotaData.remainingCount ?? 0) / quotaData.maxCount) * 100 : 0} 
                       className="h-2 flex-1"
                     />
-                    <span className="text-xs font-medium text-slate-700 min-w-[50px] text-right">
-                      残り{quotaData.remainingCount ?? 0}回
+                    <span className="text-xs font-medium text-slate-700 min-w-[60px] text-right">
+                      残り{quotaData.remainingCount ?? 0}/{quotaData.maxCount}回
                     </span>
                   </div>
                 </div>
