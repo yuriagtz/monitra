@@ -50,6 +50,9 @@ export function serveStatic(app: Express) {
     distPath = path.resolve(import.meta.dirname, "public");
   }
 
+  // 静的ファイルの拡張子リスト
+  const staticExtensions = ['.js', '.mjs', '.css', '.html', '.ico', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.woff', '.woff2', '.ttf', '.eot', '.json', '.map'];
+  
   // 静的ファイルのリクエストを優先的に処理するミドルウェア
   // APIリクエスト以外のリクエストを静的ファイルとして扱う
   app.use((req, res, next) => {
@@ -58,32 +61,59 @@ export function serveStatic(app: Express) {
       return next();
     }
     
-    // 静的ファイルのリクエストを処理
-    const filePath = path.join(distPath, req.path === '/' ? 'index.html' : req.path);
+    // リクエストパスを正規化（先頭のスラッシュを保持）
+    const requestPath = req.path === '/' ? 'index.html' : req.path;
     
-    // ファイルが存在するか確認
-    if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
-      // MIMEタイプを設定
-      if (filePath.endsWith('.js')) {
-        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-      } else if (filePath.endsWith('.mjs')) {
-        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-      } else if (filePath.endsWith('.css')) {
-        res.setHeader('Content-Type', 'text/css; charset=utf-8');
-      } else if (filePath.endsWith('.html')) {
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      } else if (filePath.endsWith('.ico')) {
-        res.setHeader('Content-Type', 'image/x-icon');
-      } else if (filePath.endsWith('.png')) {
-        res.setHeader('Content-Type', 'image/png');
-      } else if (filePath.endsWith('.svg')) {
-        res.setHeader('Content-Type', 'image/svg+xml');
-      }
-      
-      return res.sendFile(filePath);
+    // 静的ファイルのパスを解決（先頭のスラッシュを削除してから結合）
+    const normalizedPath = requestPath.startsWith('/') ? requestPath.slice(1) : requestPath;
+    const filePath = path.resolve(distPath, normalizedPath);
+    
+    // パストラバーサル攻撃を防ぐため、distPath内であることを確認
+    if (!filePath.startsWith(distPath)) {
+      console.warn(`[Static] Invalid path attempt: ${filePath}`);
+      return next();
     }
     
-    // 静的ファイルが見つからない場合、次のミドルウェアに進む
+    // ファイル拡張子をチェック
+    const ext = path.extname(filePath).toLowerCase();
+    const isStaticFile = staticExtensions.includes(ext) || requestPath === 'index.html';
+    
+    // ファイルが存在するか確認
+    if (fs.existsSync(filePath)) {
+      const stat = fs.statSync(filePath);
+      if (stat.isFile()) {
+        console.log(`[Static] Serving file: ${req.path} -> ${filePath}`);
+        
+        // MIMEタイプを設定
+        if (filePath.endsWith('.js') || filePath.endsWith('.mjs')) {
+          res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        } else if (filePath.endsWith('.css')) {
+          res.setHeader('Content-Type', 'text/css; charset=utf-8');
+        } else if (filePath.endsWith('.html')) {
+          res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        } else if (filePath.endsWith('.ico')) {
+          res.setHeader('Content-Type', 'image/x-icon');
+        } else if (filePath.endsWith('.png')) {
+          res.setHeader('Content-Type', 'image/png');
+        } else if (filePath.endsWith('.svg')) {
+          res.setHeader('Content-Type', 'image/svg+xml');
+        } else if (filePath.endsWith('.json')) {
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        } else if (filePath.endsWith('.map')) {
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        }
+        
+        return res.sendFile(filePath);
+      }
+    }
+    
+    // 静的ファイル拡張子のリクエストでファイルが見つからない場合は404
+    if (isStaticFile) {
+      console.warn(`[Static] File not found: ${req.path} (resolved: ${filePath})`);
+      return res.status(404).send('File not found');
+    }
+    
+    // 静的ファイルではない場合、次のミドルウェアに進む（SPAルートとして扱う）
     next();
   });
 
@@ -93,9 +123,7 @@ export function serveStatic(app: Express) {
     index: false, // index.htmlの自動提供を無効化（後で手動で処理）
     setHeaders: (res, filePath) => {
       // JavaScriptファイルのMIMEタイプを明示的に設定
-      if (filePath.endsWith('.js')) {
-        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-      } else if (filePath.endsWith('.mjs')) {
+      if (filePath.endsWith('.js') || filePath.endsWith('.mjs')) {
         res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
       } else if (filePath.endsWith('.css')) {
         res.setHeader('Content-Type', 'text/css; charset=utf-8');
@@ -105,11 +133,24 @@ export function serveStatic(app: Express) {
     fallthrough: true,
   }));
 
-  // すべてのリクエストでindex.htmlを返す（SPA用）
-  // 静的ファイルが見つからなかった場合のみここに到達
-  app.use("*", (_req, res) => {
+  // SPAルート: 静的ファイルではないリクエストでindex.htmlを返す
+  app.use("*", (req, res) => {
+    // APIリクエストは404を返す
+    if (req.path.startsWith('/api/')) {
+      return res.status(404).send('API endpoint not found');
+    }
+    
+    // 静的ファイル拡張子のリクエストも404を返す（上記のミドルウェアで処理されるべき）
+    const ext = path.extname(req.path).toLowerCase();
+    if (staticExtensions.includes(ext)) {
+      console.warn(`[Static] Static file not found (caught by catch-all): ${req.path}`);
+      return res.status(404).send('Static file not found');
+    }
+    
+    // それ以外のリクエスト（SPAルート）でindex.htmlを返す
     const indexHtmlPath = path.resolve(distPath, "index.html");
     if (fs.existsSync(indexHtmlPath)) {
+      console.log(`[Static] Serving SPA route: ${req.path} -> index.html`);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.sendFile(indexHtmlPath);
     } else {
