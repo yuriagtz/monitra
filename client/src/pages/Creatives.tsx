@@ -124,6 +124,13 @@ export default function Creatives() {
       refetchOnWindowFocus: false,
       refetchOnMount: false,
     });
+  
+  // 手動監視のクォータ状況を取得
+  const { data: quotaData } = trpc.manualMonitoringQuota.get.useQuery(undefined, {
+    staleTime: 0, // 常に最新を取得
+    refetchInterval: 60000, // 60秒ごとに自動更新
+    refetchOnWindowFocus: true,
+  });
 
   const creativeTagMap = useMemo(() => {
     const map = new Map<number, Set<number>>();
