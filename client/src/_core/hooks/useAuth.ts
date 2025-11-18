@@ -64,13 +64,8 @@ export function useAuth(options?: UseAuthOptions) {
       // localStorageからもユーザー情報を削除
       localStorage.removeItem("user-info");
       
-      // ログアウト後にランディングページにリダイレクト
-      // ProtectedRoutesが動作するまで少し待つ
-      setTimeout(() => {
-        if (typeof window !== "undefined") {
-          window.location.href = "/";
-        }
-      }, 100);
+      // Note: Redirect to landing page is handled by ProtectedRoutes component
+      // when user state becomes null, so we don't need to redirect here
     }
   }, [logoutMutation, utils]);
 
