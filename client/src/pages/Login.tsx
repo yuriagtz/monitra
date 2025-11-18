@@ -34,7 +34,25 @@ export default function Login() {
       }
     },
     onError: (error: any) => {
-      setError(error.message);
+      console.error("[Login] Error:", error);
+      
+      // エラーメッセージを改善
+      let errorMessage = "ログインに失敗しました";
+      
+      if (error.message) {
+        // すでに日本語のエラーメッセージの場合はそのまま使用
+        if (error.message.includes("サーバー") || error.message.includes("予期しない") || error.message.includes("データベース")) {
+          errorMessage = error.message;
+        } else if (error.message.includes("JSON") || error.message.includes("<!doctype")) {
+          errorMessage = "サーバーから予期しないレスポンスが返されました。ページを再読み込みしてください。";
+        } else if (error.message.includes("Network") || error.message.includes("fetch")) {
+          errorMessage = "ネットワークエラーが発生しました。接続を確認してください。";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      setError(errorMessage);
     },
   });
 

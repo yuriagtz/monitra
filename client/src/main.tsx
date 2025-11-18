@@ -59,11 +59,43 @@ const trpcClient = trpc.createClient({
     httpBatchLink({
       url: "/api/trpc",
       transformer: superjson,
-      fetch(input, init) {
-        return globalThis.fetch(input, {
-          ...(init ?? {}),
-          credentials: "include",
-        });
+      async fetch(input, init) {
+        try {
+          const response = await globalThis.fetch(input, {
+            ...(init ?? {}),
+            credentials: "include",
+          });
+          
+          // Content-Typeを確認して、HTMLが返されている場合はエラーを投げる
+          const contentType = response.headers.get("content-type");
+          if (contentType && !contentType.includes("application/json")) {
+            const text = await response.text();
+            console.error("[tRPC] Non-JSON response received:", {
+              url: typeof input === "string" ? input : input.url,
+              status: response.status,
+              statusText: response.statusText,
+              contentType,
+              bodyPreview: text.substring(0, 200),
+            });
+            
+            // HTMLレスポンスの場合は分かりやすいエラーメッセージを返す
+            if (text.trim().toLowerCase().startsWith("<!doctype") || text.trim().toLowerCase().startsWith("<html")) {
+              throw new Error("サーバーから予期しないレスポンスが返されました。ページを再読み込みしてください。");
+            }
+            
+            // その他の非JSONレスポンス
+            throw new Error(`サーバーエラーが発生しました (${response.status} ${response.statusText})`);
+          }
+          
+          return response;
+        } catch (error: any) {
+          // JSONパースエラーの場合、より分かりやすいエラーメッセージを返す
+          if (error.message?.includes("JSON") || error.message?.includes("<!doctype")) {
+            console.error("[tRPC] JSON parse error:", error);
+            throw new Error("サーバーから予期しないレスポンスが返されました。ページを再読み込みしてください。");
+          }
+          throw error;
+        }
       },
     }),
   ],

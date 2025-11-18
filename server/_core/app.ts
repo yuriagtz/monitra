@@ -27,6 +27,28 @@ export async function createApp(options: CreateAppOptions = {}) {
 
   registerOAuthRoutes(app);
 
+  // tRPCミドルウェアを設定（Cronエンドポイントより前に配置して優先度を確保）
+  app.use(
+    "/api/trpc",
+    createExpressMiddleware({
+      router: appRouter,
+      createContext,
+      onError: ({ path, error, type, ctx, input }) => {
+        console.error(`[tRPC] Error on path "${path}":`, {
+          code: error.code,
+          message: error.message,
+          cause: error.cause,
+          type,
+          input,
+        });
+        // エラーレスポンスはJSONで返すことを保証
+        if (ctx && ctx.res && !ctx.res.headersSent) {
+          ctx.res.setHeader('Content-Type', 'application/json');
+        }
+      },
+    })
+  );
+
   // Cronエンドポイントをtrpcルートより前に配置（優先度を高くする）
   app.get("/api/cron/schedule-check", async (req, res) => {
     // Vercel Cron Jobsでキャッシュを無効化
