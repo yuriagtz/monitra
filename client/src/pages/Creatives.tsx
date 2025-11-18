@@ -170,6 +170,48 @@ export default function Creatives() {
       }
     );
 
+  // ステータスマップ（最新ステータス & 最終変更日）
+  const creativeStatusMap = useMemo(() => {
+    if (!recentCreativeHistory || !creatives) return new Map<
+      number,
+      { status: string; createdAt: string; lastChangedAt?: string }
+    >();
+
+    const statusMap = new Map<
+      number,
+      { status: string; createdAt: string; lastChangedAt?: string }
+    >();
+
+    creatives.forEach((c: any) => {
+      const historyForCreative = recentCreativeHistory
+        .filter((h: any) => {
+          const cid = h.creativeId ?? h.creative_id;
+          return cid === c.id;
+        })
+        .sort((a: any, b: any) => {
+          const aDate = a.createdAt ?? a.created_at;
+          const bDate = b.createdAt ?? b.created_at;
+          return new Date(bDate).getTime() - new Date(aDate).getTime();
+        });
+
+      if (historyForCreative.length > 0) {
+        const latest = historyForCreative[0];
+        const lastChanged = historyForCreative.find(
+          (h: any) => h.status === "changed"
+        );
+        statusMap.set(c.id, {
+          status: latest.status,
+          createdAt: latest.createdAt ?? latest.created_at,
+          lastChangedAt: lastChanged
+            ? lastChanged.createdAt ?? lastChanged.created_at
+            : undefined,
+        });
+      }
+    });
+
+    return statusMap;
+  }, [recentCreativeHistory, creatives]);
+
   const createMutation = trpc.creatives.create.useMutation({
     onSuccess: async (data) => {
       // 新しく作成されたクリエイティブを取得
@@ -495,48 +537,6 @@ export default function Creatives() {
       clearInterval(checkInterval);
     };
   }, [isMonitoringAll, creatives, utils, user?.plan, creativeStatusMap, isCreativeRecentlyMonitored]);
-
-  // ステータスマップ（最新ステータス & 最終変更日）
-  const creativeStatusMap = useMemo(() => {
-    if (!recentCreativeHistory || !creatives) return new Map<
-      number,
-      { status: string; createdAt: string; lastChangedAt?: string }
-    >();
-
-    const statusMap = new Map<
-      number,
-      { status: string; createdAt: string; lastChangedAt?: string }
-    >();
-
-    creatives.forEach((c: any) => {
-      const historyForCreative = recentCreativeHistory
-        .filter((h: any) => {
-          const cid = h.creativeId ?? h.creative_id;
-          return cid === c.id;
-        })
-        .sort((a: any, b: any) => {
-          const aDate = a.createdAt ?? a.created_at;
-          const bDate = b.createdAt ?? b.created_at;
-          return new Date(bDate).getTime() - new Date(aDate).getTime();
-        });
-
-      if (historyForCreative.length > 0) {
-        const latest = historyForCreative[0];
-        const lastChanged = historyForCreative.find(
-          (h: any) => h.status === "changed"
-        );
-        statusMap.set(c.id, {
-          status: latest.status,
-          createdAt: latest.createdAt ?? latest.created_at,
-          lastChangedAt: lastChanged
-            ? lastChanged.createdAt ?? lastChanged.created_at
-            : undefined,
-        });
-      }
-    });
-
-    return statusMap;
-  }, [recentCreativeHistory, creatives]);
 
   const getDaysSinceLastChange = (createdAt: string, lastChangedAt?: string) => {
     const baseDate = lastChangedAt ? new Date(lastChangedAt) : new Date(createdAt);
