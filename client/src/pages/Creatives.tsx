@@ -798,7 +798,7 @@ export default function Creatives() {
                       className="h-2 flex-1"
                     />
                     <span className="text-xs font-medium text-slate-700 min-w-[50px] text-right">
-                      {quotaData.currentCount}/{quotaData.maxCount}
+                      残り{quotaData.remainingCount ?? 0}回
                     </span>
                   </div>
                 </div>

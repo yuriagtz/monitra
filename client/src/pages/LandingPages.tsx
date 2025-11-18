@@ -402,7 +402,7 @@ export default function LandingPages() {
         
         // 各LPの監視履歴を並列で取得（キャッシュを無効化して強制的に再取得）
         await Promise.all(
-          targetLpIds.map(async (lpId) => {
+          targetLandingPageIds.map(async (lpId) => {
             try {
               // キャッシュを無効化してから取得
               utils.monitoring.history.invalidate({ landingPageId: lpId });
@@ -465,7 +465,7 @@ export default function LandingPages() {
       utils.manualMonitoringQuota.get.invalidate();
           
           // 各LPの履歴も個別に無効化（履歴ページで最新情報が表示されるように）
-          targetLpIds.forEach((lpId) => {
+          targetLandingPageIds.forEach((lpId) => {
             utils.monitoring.history.invalidate({ landingPageId: lpId });
           });
         }
@@ -768,7 +768,7 @@ export default function LandingPages() {
                       className="h-2 flex-1"
                     />
                     <span className="text-xs font-medium text-slate-700 min-w-[50px] text-right">
-                      {quotaData.currentCount}/{quotaData.maxCount}
+                      残り{quotaData.remainingCount ?? 0}回
                     </span>
                   </div>
                 </div>

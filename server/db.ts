@@ -77,6 +77,11 @@ export async function getDb() {
   return _db;
 }
 
+export async function getClient() {
+  await getDb(); // _clientを初期化
+  return _client;
+}
+
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) {
     throw new Error("User openId is required for upsert");
@@ -862,25 +867,57 @@ export async function checkAndRecordManualMonitoring(
       };
     }
 
-    // 日次カウントを更新または作成
+    // 日次カウントを更新または作成（アトミックなインクリメント）
+    const client = await getClient();
+    if (!client) {
+      throw new Error("Database client not available");
+    }
+
     if (dailyQuota.length > 0) {
-      await db
-        .update(manualMonitoringQuota)
-        .set({
-          count: currentCount + 1,
-          updatedAt: now,
-        })
-        .where(eq(manualMonitoringQuota.id, dailyQuota[0].id));
+      // 既存レコードの場合: SQLでアトミックにインクリメント
+      await client`UPDATE manual_monitoring_quota SET count = count + 1, updated_at = ${now} WHERE id = ${dailyQuota[0].id}`;
     } else {
-      // 当日の日次カウントレコードがない場合は作成
-      await db.insert(manualMonitoringQuota).values({
-        userId,
-        targetId: -1, // ダミーID（日次カウント用）
-        targetType: "lp", // ダミータイプ（日次カウント用）
-        lastMonitoredAt: now,
-        date: today,
-        count: 1,
-      });
+      // 当日の日次カウントレコードがない場合は作成（INSERT ... ON CONFLICT DO UPDATE で競合を回避）
+      try {
+        await client`
+          INSERT INTO manual_monitoring_quota (user_id, target_id, target_type, last_monitored_at, date, count, created_at, updated_at)
+          VALUES (${userId}, -1, 'lp', ${now}, ${today}, 1, ${now}, ${now})
+          ON CONFLICT DO NOTHING
+        `;
+        // レコードが作成されたか確認、されていない場合は別のプロセスが作成した可能性があるので、再度インクリメント
+        const updatedQuota = await db
+          .select()
+          .from(manualMonitoringQuota)
+          .where(
+            and(
+              eq(manualMonitoringQuota.userId, userId),
+              eq(manualMonitoringQuota.date, today),
+              eq(manualMonitoringQuota.targetId, -1)
+            )
+          )
+          .limit(1);
+        
+        if (updatedQuota.length > 0 && updatedQuota[0].id) {
+          await client`UPDATE manual_monitoring_quota SET count = count + 1, updated_at = ${now} WHERE id = ${updatedQuota[0].id}`;
+        }
+      } catch (error) {
+        // 競合が発生した場合は、既存レコードをインクリメント
+        const existingQuota = await db
+          .select()
+          .from(manualMonitoringQuota)
+          .where(
+            and(
+              eq(manualMonitoringQuota.userId, userId),
+              eq(manualMonitoringQuota.date, today),
+              eq(manualMonitoringQuota.targetId, -1)
+            )
+          )
+          .limit(1);
+        
+        if (existingQuota.length > 0 && existingQuota[0].id) {
+          await client`UPDATE manual_monitoring_quota SET count = count + 1, updated_at = ${now} WHERE id = ${existingQuota[0].id}`;
+        }
+      }
     }
   }
 
