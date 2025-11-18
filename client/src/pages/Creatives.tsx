@@ -494,8 +494,6 @@ export default function Creatives() {
     return () => {
       clearInterval(checkInterval);
     };
-  }, [isMonitoringAll, creatives, utils, user?.plan, creativeStatusMap]);
-
   // ステータスマップ（最新ステータス & 最終変更日）
   const creativeStatusMap = useMemo(() => {
     if (!recentCreativeHistory || !creatives) return new Map<
