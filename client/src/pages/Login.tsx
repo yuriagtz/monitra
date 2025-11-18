@@ -24,12 +24,13 @@ export default function Login() {
       // 認証状態を再取得してからリダイレクト
       const result = await utils.auth.me.refetch();
       if (result.data) {
-        // 認証状態が確認できたらリダイレクト
-        window.location.href = "/dashboard";
+        // 認証状態が確認できたらリダイレクト（URLを確実に変更）
+        // window.location.replace を使用して、ブラウザの履歴に /login を残さない
+        window.location.replace("/dashboard");
       } else {
         // 認証状態が確認できない場合は少し待ってからリダイレクト
         setTimeout(() => {
-          window.location.href = "/dashboard";
+          window.location.replace("/dashboard");
         }, 500);
       }
     },

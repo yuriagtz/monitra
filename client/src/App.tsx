@@ -2,6 +2,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
+import { useEffect } from "react";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import DashboardLayout from "./components/DashboardLayout";
@@ -21,6 +22,20 @@ import Login from "./pages/Login";
 import AuthCallback from "./pages/AuthCallback";
 import { useAuth } from "./_core/hooks/useAuth";
 import { Loader2 } from "lucide-react";
+
+// ログイン済みユーザーが /login にアクセスした場合に /dashboard にリダイレクトするコンポーネント
+function LoginRedirect() {
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.location.replace("/dashboard");
+    }
+  }, []);
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+    </div>
+  );
+}
 
 function ProtectedRoutes() {
   const { user, loading, refresh } = useAuth();
@@ -53,8 +68,8 @@ function ProtectedRoutes() {
       <Switch>
         <Route path="/" component={Dashboard} />
         <Route path="/dashboard" component={Dashboard} />
-        {/* ログイン済みで /login にアクセスした場合もダッシュボードを表示 */}
-        <Route path="/login" component={Dashboard} />
+        {/* ログイン済みで /login にアクセスした場合は /dashboard にリダイレクト */}
+        <Route path="/login" component={LoginRedirect} />
         <Route path="/landing-pages" component={LandingPages} />
         <Route path="/history/:id" component={MonitoringHistory} />
         <Route path="/creatives" component={Creatives} />
