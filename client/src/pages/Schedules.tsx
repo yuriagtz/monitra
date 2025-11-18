@@ -22,7 +22,11 @@ export default function Schedules() {
   const { data: landingPages } = trpc.landingPages.list.useQuery();
   const { data: creatives } = trpc.creatives.list.useQuery();
   const { data: schedules, refetch } = trpc.schedules.list.useQuery();
-  const scheduleQuery = trpc.schedules.get.useQuery();
+  const scheduleQuery = trpc.schedules.get.useQuery(undefined, {
+    staleTime: 0, // キャッシュを使わずに常に最新を取得
+    refetchOnWindowFocus: true, // ウィンドウフォーカス時に再取得
+    refetchInterval: 30000, // 30秒ごとに自動更新
+  });
   const upsertSchedule = trpc.schedules.upsert.useMutation();
   const deleteSchedule = trpc.schedules.delete.useMutation();
   const startSchedule = trpc.schedules.start.useMutation();
@@ -31,7 +35,11 @@ export default function Schedules() {
 
   // Creative schedules
   const { data: creativeSchedules, refetch: refetchCreativeSchedules } = trpc.creativeSchedules.list.useQuery();
-  const creativeScheduleQuery = trpc.creativeSchedules.get.useQuery();
+  const creativeScheduleQuery = trpc.creativeSchedules.get.useQuery(undefined, {
+    staleTime: 0, // キャッシュを使わずに常に最新を取得
+    refetchOnWindowFocus: true, // ウィンドウフォーカス時に再取得
+    refetchInterval: 30000, // 30秒ごとに自動更新
+  });
   const upsertCreativeSchedule = trpc.creativeSchedules.upsert.useMutation();
   const deleteCreativeSchedule = trpc.creativeSchedules.delete.useMutation();
   const startCreativeSchedule = trpc.creativeSchedules.start.useMutation();
