@@ -300,6 +300,8 @@ export default function Creatives() {
       // 監視履歴を更新（該当クリエイティブの履歴も無効化）
       utils.monitoring.creativeHistory.invalidate({ creativeId: variables.id });
       utils.monitoring.creativeRecent.invalidate();
+      // クォータ情報を更新
+      utils.manualMonitoringQuota.get.invalidate();
     },
     onError: (error: any, variables) => {
       // エラー時も：該当クリエイティブのIDを削除
@@ -444,6 +446,8 @@ export default function Creatives() {
 
           // 監視履歴を更新（全クリエイティブの履歴を無効化して履歴ページで最新情報が表示されるように）
           utils.monitoring.creativeRecent.invalidate();
+          // クォータ情報も更新
+          utils.manualMonitoringQuota.get.invalidate();
           
           // 各クリエイティブの履歴も個別に無効化（履歴ページで最新情報が表示されるように）
           targetCreativeIds.forEach((creativeId) => {
@@ -774,7 +778,31 @@ export default function Creatives() {
               バナー広告などのクリエイティブを登録し、変更を監視します
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-4">
+            {/* 手動監視クォータ表示 */}
+            {quotaData && quotaData.maxCount !== null && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-md">
+                <Clock className="w-4 h-4 text-slate-600" />
+                <div className="flex flex-col gap-1 min-w-[140px]">
+                  <div className="text-xs text-slate-600">手動監視クォータ</div>
+                  <div className="flex items-center gap-2">
+                    <Progress 
+                      value={quotaData.maxCount > 0 ? (quotaData.currentCount / quotaData.maxCount) * 100 : 0} 
+                      className="h-2 flex-1"
+                    />
+                    <span className="text-xs font-medium text-slate-700 min-w-[50px] text-right">
+                      {quotaData.currentCount}/{quotaData.maxCount}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+            {quotaData && quotaData.maxCount === null && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-md">
+                <Clock className="w-4 h-4 text-emerald-600" />
+                <div className="text-xs text-emerald-700 font-medium">手動監視: 無制限</div>
+              </div>
+            )}
             <Button
               variant="outline"
               onClick={() => monitorAllMutation.mutate()}
