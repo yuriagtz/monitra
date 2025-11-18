@@ -27,7 +27,23 @@ export async function createApp(options: CreateAppOptions = {}) {
   );
 
   app.get("/api/cron/schedule-check", async (req, res) => {
-    if (process.env.CRON_SECRET) {
+    // Vercel Cron Jobsでキャッシュを無効化
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    
+    const startTime = Date.now();
+    console.log("[Cron] Schedule check endpoint called");
+    console.log("[Cron] Request headers:", JSON.stringify(req.headers, null, 2));
+    console.log("[Cron] Environment:", {
+      VERCEL: process.env.VERCEL,
+      NODE_ENV: process.env.NODE_ENV,
+      hasCRON_SECRET: !!process.env.CRON_SECRET,
+    });
+
+    // Vercel環境の場合、Vercelが自動的にAuthorizationヘッダーを追加する
+    // 手動実行（開発・テスト用）の場合のみCRON_SECRETで検証
+    if (process.env.CRON_SECRET && !process.env.VERCEL) {
       const authHeader = req.headers["authorization"];
       const cronSecret = req.headers["x-cron-secret"] || req.query.secret;
       const isValid =
@@ -36,17 +52,28 @@ export async function createApp(options: CreateAppOptions = {}) {
 
       if (!isValid) {
         console.warn("[Cron] Unauthorized request to schedule-check endpoint");
+        console.warn("[Cron] Auth header:", authHeader);
+        console.warn("[Cron] Cron secret:", cronSecret);
         return res.status(401).json({ error: "Unauthorized" });
       }
     }
 
     try {
+      console.log("[Cron] Starting schedule check...");
       const { checkAndRunSchedules } = await import("../scheduler");
       const result = await checkAndRunSchedules();
-      res.json({ success: true, ...result });
-    } catch (error) {
+      const duration = Date.now() - startTime;
+      console.log(`[Cron] Schedule check completed in ${duration}ms`, result);
+      res.json({ success: true, ...result, duration });
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
       console.error("[Cron] Error executing schedule check:", error);
-      res.status(500).json({ error: "Internal server error" });
+      console.error("[Cron] Error stack:", error?.stack);
+      res.status(500).json({ 
+        error: "Internal server error", 
+        message: error?.message,
+        duration 
+      });
     }
   });
 
