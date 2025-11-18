@@ -857,7 +857,7 @@ export default function Creatives() {
                   <div className="text-xs text-slate-600">手動監視クォータ</div>
                   <div className="flex items-center gap-2">
                     <Progress 
-                      value={quotaData.maxCount > 0 ? (quotaData.currentCount / quotaData.maxCount) * 100 : 0} 
+                      value={quotaData.maxCount > 0 ? ((quotaData.remainingCount ?? 0) / quotaData.maxCount) * 100 : 0} 
                       className="h-2 flex-1"
                     />
                     <span className="text-xs font-medium text-slate-700 min-w-[50px] text-right">
