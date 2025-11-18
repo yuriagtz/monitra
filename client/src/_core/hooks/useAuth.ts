@@ -2,6 +2,7 @@ import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
 import { useCallback, useEffect, useMemo } from "react";
+import { createClient } from "@/lib/supabase";
 
 type UseAuthOptions = {
   redirectOnUnauthenticated?: boolean;
@@ -26,20 +27,50 @@ export function useAuth(options?: UseAuthOptions) {
 
   const logout = useCallback(async () => {
     try {
+      // サーバー側のログアウト処理を実行
       await logoutMutation.mutateAsync();
+      
+      // クライアント側のSupabaseセッションもクリア
+      try {
+        const supabase = createClient();
+        await supabase.auth.signOut();
+      } catch (supabaseError) {
+        console.warn("[Auth] Failed to sign out from Supabase client:", supabaseError);
+        // Supabaseクライアントのサインアウトに失敗しても続行
+      }
     } catch (error: unknown) {
       if (
         error instanceof TRPCClientError &&
         error.data?.code === "UNAUTHORIZED"
       ) {
-        return;
+        // 既にログアウト済みの場合は、クライアント側のセッションをクリアして続行
+        try {
+          const supabase = createClient();
+          await supabase.auth.signOut();
+        } catch (supabaseError) {
+          console.warn("[Auth] Failed to sign out from Supabase client:", supabaseError);
+        }
+      } else {
+        throw error;
       }
-      throw error;
     } finally {
+      // すべてのクエリキャッシュをクリア
       utils.auth.me.setData(undefined, null);
       await utils.auth.me.invalidate();
-      // Note: Redirect to landing page is handled by ProtectedRoutes component
-      // when user state becomes null, so we don't need to redirect here
+      
+      // すべてのtRPCクエリキャッシュを無効化（念のため）
+      utils.invalidate();
+      
+      // localStorageからもユーザー情報を削除
+      localStorage.removeItem("user-info");
+      
+      // ログアウト後にランディングページにリダイレクト
+      // ProtectedRoutesが動作するまで少し待つ
+      setTimeout(() => {
+        if (typeof window !== "undefined") {
+          window.location.href = "/";
+        }
+      }, 100);
     }
   }, [logoutMutation, utils]);
 
