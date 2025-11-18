@@ -779,16 +779,35 @@ export async function checkAndRunSchedules() {
     
     // nextRunAtが過ぎている場合は、即座に次回実行予定日時を更新して、重複実行を防ぐ
     if (nextRunAtUTC && nextRunAtUTC.getTime() <= nowUTC.getTime()) {
-      // 日本時間での次回実行予定日時を計算
-      const nextJSTDate = new Date(nowLocal);
+      // 日本時間での次回実行予定日時を計算（calculateNextRunAtと同じロジック）
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      });
+      
+      const nowParts = formatter.formatToParts(nowUTC);
+      const nowJSTYear = parseInt(nowParts.find(p => p.type === 'year')!.value);
+      const nowJSTMonth = parseInt(nowParts.find(p => p.type === 'month')!.value) - 1;
+      const nowJSTDay = parseInt(nowParts.find(p => p.type === 'day')!.value);
+      
+      // 次回実行予定日時を日本時間で計算
+      const nextJSTDate = new Date(nowJSTYear, nowJSTMonth, nowJSTDay);
       nextJSTDate.setDate(nextJSTDate.getDate() + schedule.intervalDays);
-      nextJSTDate.setHours(executeHour, 0, 0, 0);
+      const nextJSTYear = nextJSTDate.getFullYear();
+      const nextJSTMonth = nextJSTDate.getMonth();
+      const nextJSTDay = nextJSTDate.getDate();
       
       // 日本時間をUTC時刻に変換して保存（calculateNextRunAtと同じロジック）
       const nextRunAt = new Date(Date.UTC(
-        nextJSTDate.getFullYear(),
-        nextJSTDate.getMonth(),
-        nextJSTDate.getDate(),
+        nextJSTYear,
+        nextJSTMonth,
+        nextJSTDay,
         executeHour - 9, // JST→UTC変換
         0,
         0
@@ -797,7 +816,7 @@ export async function checkAndRunSchedules() {
       await db.update(scheduleSettings)
         .set({ nextRunAt })
         .where(eq(scheduleSettings.id, scheduleId));
-      console.log(`[Scheduler] Updated nextRunAt to ${nextRunAt.toISOString()} (JST: ${nextJSTDate.getFullYear()}-${String(nextJSTDate.getMonth() + 1).padStart(2, '0')}-${String(nextJSTDate.getDate()).padStart(2, '0')} ${String(executeHour).padStart(2, '0')}:00) to prevent duplicate execution`);
+      console.log(`[Scheduler] Updated nextRunAt to ${nextRunAt.toISOString()} (JST: ${nextJSTYear}-${String(nextJSTMonth + 1).padStart(2, '0')}-${String(nextJSTDay).padStart(2, '0')} ${String(executeHour).padStart(2, '0')}:00) to prevent duplicate execution`);
     }
     
     // 実行中フラグを設定
@@ -822,19 +841,40 @@ export async function checkAndRunSchedules() {
       
       if (targetLandingPages.length === 0) {
         console.log(`[Scheduler] No LPs to monitor for user ${schedule.userId}`);
-        // 次回実行予定日時を更新（日本時間で計算してからUTCに変換）
-        const nextJSTDate = new Date(nowLocal);
+        // 次回実行予定日時を更新（日本時間で計算してからUTCに変換、calculateNextRunAtと同じロジック）
+        const formatter = new Intl.DateTimeFormat('en-US', {
+          timeZone: timezone,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+        });
+        
+        const nowParts = formatter.formatToParts(nowUTC);
+        const nowJSTYear = parseInt(nowParts.find(p => p.type === 'year')!.value);
+        const nowJSTMonth = parseInt(nowParts.find(p => p.type === 'month')!.value) - 1;
+        const nowJSTDay = parseInt(nowParts.find(p => p.type === 'day')!.value);
+        
+        // 次回実行予定日時を日本時間で計算
+        const nextJSTDate = new Date(nowJSTYear, nowJSTMonth, nowJSTDay);
         nextJSTDate.setDate(nextJSTDate.getDate() + schedule.intervalDays);
-        nextJSTDate.setHours(executeHour, 0, 0, 0);
+        const nextJSTYear = nextJSTDate.getFullYear();
+        const nextJSTMonth = nextJSTDate.getMonth();
+        const nextJSTDay = nextJSTDate.getDate();
+        
         // 日本時間をUTC時刻に変換して保存（calculateNextRunAtと同じロジック）
         const nextRunAt = new Date(Date.UTC(
-          nextJSTDate.getFullYear(),
-          nextJSTDate.getMonth(),
-          nextJSTDate.getDate(),
+          nextJSTYear,
+          nextJSTMonth,
+          nextJSTDay,
           executeHour - 9, // JST→UTC変換
           0,
           0
         ));
+        
         await db.update(scheduleSettings)
           .set({ 
             lastRunAt: nowLocal,
@@ -871,15 +911,35 @@ export async function checkAndRunSchedules() {
       
       await Promise.all(monitoringPromises);
       
-      // 次回実行予定日時を更新（日本時間で計算してからUTCに変換）
-      const nextJSTDate = new Date(nowLocal);
+      // 次回実行予定日時を更新（日本時間で計算してからUTCに変換、calculateNextRunAtと同じロジック）
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      });
+      
+      const nowParts = formatter.formatToParts(nowUTC);
+      const nowJSTYear = parseInt(nowParts.find(p => p.type === 'year')!.value);
+      const nowJSTMonth = parseInt(nowParts.find(p => p.type === 'month')!.value) - 1;
+      const nowJSTDay = parseInt(nowParts.find(p => p.type === 'day')!.value);
+      
+      // 次回実行予定日時を日本時間で計算
+      const nextJSTDate = new Date(nowJSTYear, nowJSTMonth, nowJSTDay);
       nextJSTDate.setDate(nextJSTDate.getDate() + schedule.intervalDays);
-      nextJSTDate.setHours(executeHour, 0, 0, 0);
+      const nextJSTYear = nextJSTDate.getFullYear();
+      const nextJSTMonth = nextJSTDate.getMonth();
+      const nextJSTDay = nextJSTDate.getDate();
+      
       // 日本時間をUTC時刻に変換して保存（calculateNextRunAtと同じロジック）
       const nextRunAt = new Date(Date.UTC(
-        nextJSTDate.getFullYear(),
-        nextJSTDate.getMonth(),
-        nextJSTDate.getDate(),
+        nextJSTYear,
+        nextJSTMonth,
+        nextJSTDay,
         executeHour - 9, // JST→UTC変換
         0,
         0
@@ -971,16 +1031,35 @@ export async function checkAndRunSchedules() {
     
     // nextRunAtが過ぎている場合は、即座に次回実行予定日時を更新して、重複実行を防ぐ
     if (nextRunAtUTC && nextRunAtUTC.getTime() <= nowUTC.getTime()) {
-      // 日本時間での次回実行予定日時を計算
-      const nextJSTDate = new Date(nowLocal);
+      // 日本時間での次回実行予定日時を計算（calculateNextRunAtと同じロジック）
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      });
+      
+      const nowParts = formatter.formatToParts(nowUTC);
+      const nowJSTYear = parseInt(nowParts.find(p => p.type === 'year')!.value);
+      const nowJSTMonth = parseInt(nowParts.find(p => p.type === 'month')!.value) - 1;
+      const nowJSTDay = parseInt(nowParts.find(p => p.type === 'day')!.value);
+      
+      // 次回実行予定日時を日本時間で計算
+      const nextJSTDate = new Date(nowJSTYear, nowJSTMonth, nowJSTDay);
       nextJSTDate.setDate(nextJSTDate.getDate() + schedule.intervalDays);
-      nextJSTDate.setHours(executeHour, 0, 0, 0);
+      const nextJSTYear = nextJSTDate.getFullYear();
+      const nextJSTMonth = nextJSTDate.getMonth();
+      const nextJSTDay = nextJSTDate.getDate();
       
       // 日本時間をUTC時刻に変換して保存（calculateNextRunAtと同じロジック）
       const nextRunAt = new Date(Date.UTC(
-        nextJSTDate.getFullYear(),
-        nextJSTDate.getMonth(),
-        nextJSTDate.getDate(),
+        nextJSTYear,
+        nextJSTMonth,
+        nextJSTDay,
         executeHour - 9, // JST→UTC変換
         0,
         0
@@ -989,7 +1068,7 @@ export async function checkAndRunSchedules() {
       await db.update(creativeScheduleSettings)
         .set({ nextRunAt })
         .where(eq(creativeScheduleSettings.id, scheduleId));
-      console.log(`[Scheduler] Updated nextRunAt to ${nextRunAt.toISOString()} (JST: ${nextJSTDate.getFullYear()}-${String(nextJSTDate.getMonth() + 1).padStart(2, '0')}-${String(nextJSTDate.getDate()).padStart(2, '0')} ${String(executeHour).padStart(2, '0')}:00) to prevent duplicate execution`);
+      console.log(`[Scheduler] Updated nextRunAt to ${nextRunAt.toISOString()} (JST: ${nextJSTYear}-${String(nextJSTMonth + 1).padStart(2, '0')}-${String(nextJSTDay).padStart(2, '0')} ${String(executeHour).padStart(2, '0')}:00) to prevent duplicate execution`);
     }
     
     // 実行中フラグを設定
@@ -1014,19 +1093,40 @@ export async function checkAndRunSchedules() {
       
       if (targetCreatives.length === 0) {
         console.log(`[Scheduler] No creatives to monitor for user ${schedule.userId}`);
-        // 次回実行予定日時を更新（日本時間で計算してからUTCに変換）
-        const nextJSTDate = new Date(nowLocal);
+        // 次回実行予定日時を更新（日本時間で計算してからUTCに変換、calculateNextRunAtと同じロジック）
+        const formatter = new Intl.DateTimeFormat('en-US', {
+          timeZone: timezone,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+        });
+        
+        const nowParts = formatter.formatToParts(nowUTC);
+        const nowJSTYear = parseInt(nowParts.find(p => p.type === 'year')!.value);
+        const nowJSTMonth = parseInt(nowParts.find(p => p.type === 'month')!.value) - 1;
+        const nowJSTDay = parseInt(nowParts.find(p => p.type === 'day')!.value);
+        
+        // 次回実行予定日時を日本時間で計算
+        const nextJSTDate = new Date(nowJSTYear, nowJSTMonth, nowJSTDay);
         nextJSTDate.setDate(nextJSTDate.getDate() + schedule.intervalDays);
-        nextJSTDate.setHours(executeHour, 0, 0, 0);
+        const nextJSTYear = nextJSTDate.getFullYear();
+        const nextJSTMonth = nextJSTDate.getMonth();
+        const nextJSTDay = nextJSTDate.getDate();
+        
         // 日本時間をUTC時刻に変換して保存（calculateNextRunAtと同じロジック）
         const nextRunAt = new Date(Date.UTC(
-          nextJSTDate.getFullYear(),
-          nextJSTDate.getMonth(),
-          nextJSTDate.getDate(),
+          nextJSTYear,
+          nextJSTMonth,
+          nextJSTDay,
           executeHour - 9, // JST→UTC変換
           0,
           0
         ));
+        
         await db.update(creativeScheduleSettings)
           .set({ 
             lastRunAt: nowLocal,
@@ -1063,15 +1163,35 @@ export async function checkAndRunSchedules() {
       
       await Promise.all(monitoringPromises);
       
-      // 次回実行予定日時を更新（日本時間で計算してからUTCに変換）
-      const nextJSTDate = new Date(nowLocal);
+      // 次回実行予定日時を更新（日本時間で計算してからUTCに変換、calculateNextRunAtと同じロジック）
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      });
+      
+      const nowParts = formatter.formatToParts(nowUTC);
+      const nowJSTYear = parseInt(nowParts.find(p => p.type === 'year')!.value);
+      const nowJSTMonth = parseInt(nowParts.find(p => p.type === 'month')!.value) - 1;
+      const nowJSTDay = parseInt(nowParts.find(p => p.type === 'day')!.value);
+      
+      // 次回実行予定日時を日本時間で計算
+      const nextJSTDate = new Date(nowJSTYear, nowJSTMonth, nowJSTDay);
       nextJSTDate.setDate(nextJSTDate.getDate() + schedule.intervalDays);
-      nextJSTDate.setHours(executeHour, 0, 0, 0);
+      const nextJSTYear = nextJSTDate.getFullYear();
+      const nextJSTMonth = nextJSTDate.getMonth();
+      const nextJSTDay = nextJSTDate.getDate();
+      
       // 日本時間をUTC時刻に変換して保存（calculateNextRunAtと同じロジック）
       const nextRunAt = new Date(Date.UTC(
-        nextJSTDate.getFullYear(),
-        nextJSTDate.getMonth(),
-        nextJSTDate.getDate(),
+        nextJSTYear,
+        nextJSTMonth,
+        nextJSTDay,
         executeHour - 9, // JST→UTC変換
         0,
         0
