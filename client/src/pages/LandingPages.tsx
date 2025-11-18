@@ -846,7 +846,13 @@ export default function LandingPages() {
             <Button
               variant="outline"
               onClick={() => monitorAllMutation.mutate()}
-              disabled={isMonitoringAll || monitorAllMutation.isPending || monitorMutation.isPending}
+              disabled={
+                isMonitoringAll ||
+                monitorAllMutation.isPending ||
+                monitorMutation.isPending ||
+                !landingPages ||
+                landingPages.length === 0
+              }
               className="bg-white"
             >
               {isMonitoringAll || monitorAllMutation.isPending ? (
