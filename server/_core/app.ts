@@ -13,19 +13,21 @@ type CreateAppOptions = {
 export async function createApp(options: CreateAppOptions = {}) {
   const app = express();
 
+  // 全てのリクエストをログに記録（デバッグ用）
+  app.use((req, res, next) => {
+    if (req.path.startsWith("/api/cron")) {
+      console.log(`[App] Incoming request: ${req.method} ${req.path}`);
+      console.log(`[App] Request headers:`, JSON.stringify(req.headers, null, 2));
+    }
+    next();
+  });
+
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
   registerOAuthRoutes(app);
 
-  app.use(
-    "/api/trpc",
-    createExpressMiddleware({
-      router: appRouter,
-      createContext,
-    })
-  );
-
+  // Cronエンドポイントをtrpcルートより前に配置（優先度を高くする）
   app.get("/api/cron/schedule-check", async (req, res) => {
     // Vercel Cron Jobsでキャッシュを無効化
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');

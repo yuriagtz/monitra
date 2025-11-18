@@ -61,7 +61,17 @@ if (!process.env.VERCEL) {
 }
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
+  // すべてのリクエストをログに記録（デバッグ用）
+  const url = req.url || "";
+  const method = req.method || "GET";
+  if (url.includes("/api/cron")) {
+    console.log(`[Handler] Incoming request: ${method} ${url}`);
+    console.log(`[Handler] VERCEL env: ${process.env.VERCEL}`);
+    console.log(`[Handler] NODE_ENV: ${process.env.NODE_ENV}`);
+  }
+  
   if (!appPromise) {
+    console.log("[Handler] Creating app instance...");
     appPromise = createApp();
   }
   const app = await appPromise;
