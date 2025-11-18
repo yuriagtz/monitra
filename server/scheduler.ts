@@ -722,13 +722,12 @@ export async function checkAndRunSchedules() {
     const scheduleId = schedule.id;
     const executeHour = schedule.executeHour ?? 9;
     
-    // nextRunAtをローカル時間として解釈
-    // データベースにはUTC時間で保存されているが、ローカル時間として扱う
-    let nextRunAtLocal: Date | null = null;
+    // nextRunAtはUTC時刻として保存されているので、UTC時刻として扱う
+    let nextRunAtUTC: Date | null = null;
     if (schedule.nextRunAt) {
-      const nextRunAtUTC = new Date(schedule.nextRunAt);
-      // UTC時間を指定されたタイムゾーンのローカル時間に変換
-      // nextRunAtは本来ローカル時間で設定されているため、UTCとして保存されているものをローカル時間として解釈
+      nextRunAtUTC = new Date(schedule.nextRunAt);
+      
+      // デバッグ用：nextRunAtを日本時間で表示
       const formatter = new Intl.DateTimeFormat('en-US', {
         timeZone: timezone,
         year: 'numeric',
@@ -739,20 +738,13 @@ export async function checkAndRunSchedules() {
         second: '2-digit',
         hour12: false,
       });
-      const parts = formatter.formatToParts(nextRunAtUTC);
-      nextRunAtLocal = new Date(
-        parseInt(parts.find(p => p.type === 'year')!.value),
-        parseInt(parts.find(p => p.type === 'month')!.value) - 1,
-        parseInt(parts.find(p => p.type === 'day')!.value),
-        parseInt(parts.find(p => p.type === 'hour')!.value),
-        parseInt(parts.find(p => p.type === 'minute')!.value),
-        parseInt(parts.find(p => p.type === 'second')!.value)
-      );
+      const nextRunAtJSTStr = formatter.format(nextRunAtUTC);
+      console.log(`[Scheduler] Schedule ${scheduleId}: nextRunAt UTC=${nextRunAtUTC.toISOString()}, JST=${nextRunAtJSTStr}`);
     }
     
-    // nextRunAtが設定されている場合、まだ来ていない場合はスキップ
-    if (nextRunAtLocal && nextRunAtLocal.getTime() > nowLocal.getTime()) {
-      const timeDiff = nextRunAtLocal.getTime() - nowLocal.getTime();
+    // nextRunAtが設定されている場合、まだ来ていない場合はスキップ（UTC時刻で比較）
+    if (nextRunAtUTC && nextRunAtUTC.getTime() > nowUTC.getTime()) {
+      const timeDiff = nextRunAtUTC.getTime() - nowUTC.getTime();
       const minutesDiff = Math.floor(timeDiff / 1000 / 60);
       console.log(`[Scheduler] Schedule ${scheduleId}: nextRunAt is in the future (${minutesDiff} minutes later), skipping`);
       continue;
@@ -760,15 +752,20 @@ export async function checkAndRunSchedules() {
     
     // nextRunAtが設定されていない場合、実行時刻が一致しない場合はスキップ
     // 実行時刻が一致しなくても、nextRunAtが過ぎている場合は実行する（Cronジョブの実行遅延を考慮）
-    if (!nextRunAtLocal && (currentHour !== executeHour || currentMinute > 5)) {
+    if (!nextRunAtUTC && (currentHour !== executeHour || currentMinute > 5)) {
       console.log(`[Scheduler] Schedule ${scheduleId}: execution hour doesn't match (current: ${currentHour}:${currentMinute.toString().padStart(2, '0')}, executeHour: ${executeHour}), skipping`);
       continue;
     }
     
     // nextRunAtが設定されているが、実行時刻が大きく外れている場合（±1時間以上）はスキップ
-    if (nextRunAtLocal) {
+    // ただし、nextRunAtが既に過ぎている場合は実行する（Cronジョブの実行遅延を考慮）
+    if (nextRunAtUTC) {
       const hourDiff = Math.abs(currentHour - executeHour);
-      if (hourDiff > 1 && hourDiff < 23) {
+      // nextRunAtが既に過ぎている場合は実行（時刻のずれを許容）
+      if (nextRunAtUTC.getTime() <= nowUTC.getTime()) {
+        // nextRunAtが過ぎているので実行を続ける
+        console.log(`[Scheduler] Schedule ${scheduleId}: nextRunAt has passed, will execute (current JST: ${currentHour}:${currentMinute.toString().padStart(2, '0')}, executeHour: ${executeHour})`);
+      } else if (hourDiff > 1 && hourDiff < 23) {
         console.log(`[Scheduler] Schedule ${scheduleId}: execution hour is too far from executeHour (current: ${currentHour}:${currentMinute.toString().padStart(2, '0')}, executeHour: ${executeHour}), skipping`);
         continue;
       }
@@ -781,16 +778,26 @@ export async function checkAndRunSchedules() {
     }
     
     // nextRunAtが過ぎている場合は、即座に次回実行予定日時を更新して、重複実行を防ぐ
-    if (nextRunAtLocal && nextRunAtLocal.getTime() <= nowLocal.getTime()) {
-      const nextRunAtLocalCalc = new Date(nowLocal);
-      nextRunAtLocalCalc.setDate(nextRunAtLocalCalc.getDate() + schedule.intervalDays);
-      nextRunAtLocalCalc.setHours(executeHour, 0, 0, 0);
-      // ローカル時間をUTC時間に変換して保存
-      const nextRunAt = new Date(nextRunAtLocalCalc.getTime());
+    if (nextRunAtUTC && nextRunAtUTC.getTime() <= nowUTC.getTime()) {
+      // 日本時間での次回実行予定日時を計算
+      const nextJSTDate = new Date(nowLocal);
+      nextJSTDate.setDate(nextJSTDate.getDate() + schedule.intervalDays);
+      nextJSTDate.setHours(executeHour, 0, 0, 0);
+      
+      // 日本時間をUTC時刻に変換して保存（calculateNextRunAtと同じロジック）
+      const nextRunAt = new Date(Date.UTC(
+        nextJSTDate.getFullYear(),
+        nextJSTDate.getMonth(),
+        nextJSTDate.getDate(),
+        executeHour - 9, // JST→UTC変換
+        0,
+        0
+      ));
+      
       await db.update(scheduleSettings)
         .set({ nextRunAt })
         .where(eq(scheduleSettings.id, scheduleId));
-      console.log(`[Scheduler] Updated nextRunAt to ${nextRunAt.toISOString()} (local: ${nextRunAtLocalCalc.toISOString()}) to prevent duplicate execution`);
+      console.log(`[Scheduler] Updated nextRunAt to ${nextRunAt.toISOString()} (JST: ${nextJSTDate.getFullYear()}-${String(nextJSTDate.getMonth() + 1).padStart(2, '0')}-${String(nextJSTDate.getDate()).padStart(2, '0')} ${String(executeHour).padStart(2, '0')}:00) to prevent duplicate execution`);
     }
     
     // 実行中フラグを設定
@@ -815,12 +822,19 @@ export async function checkAndRunSchedules() {
       
       if (targetLandingPages.length === 0) {
         console.log(`[Scheduler] No LPs to monitor for user ${schedule.userId}`);
-        // 次回実行予定日時を更新（ローカル時間で計算してからUTCに変換）
-        const nextRunAtLocalCalc = new Date(nowLocal);
-        nextRunAtLocalCalc.setDate(nextRunAtLocalCalc.getDate() + schedule.intervalDays);
-        nextRunAtLocalCalc.setHours(executeHour, 0, 0, 0);
-        // ローカル時間をUTC時間に変換して保存
-        const nextRunAt = new Date(nextRunAtLocalCalc.getTime());
+        // 次回実行予定日時を更新（日本時間で計算してからUTCに変換）
+        const nextJSTDate = new Date(nowLocal);
+        nextJSTDate.setDate(nextJSTDate.getDate() + schedule.intervalDays);
+        nextJSTDate.setHours(executeHour, 0, 0, 0);
+        // 日本時間をUTC時刻に変換して保存（calculateNextRunAtと同じロジック）
+        const nextRunAt = new Date(Date.UTC(
+          nextJSTDate.getFullYear(),
+          nextJSTDate.getMonth(),
+          nextJSTDate.getDate(),
+          executeHour - 9, // JST→UTC変換
+          0,
+          0
+        ));
         await db.update(scheduleSettings)
           .set({ 
             lastRunAt: nowLocal,
@@ -857,12 +871,19 @@ export async function checkAndRunSchedules() {
       
       await Promise.all(monitoringPromises);
       
-      // 次回実行予定日時を更新（ローカル時間で計算してからUTCに変換）
-      const nextRunAtLocal = new Date(nowLocal);
-      nextRunAtLocal.setDate(nextRunAtLocal.getDate() + schedule.intervalDays);
-      nextRunAtLocal.setHours(executeHour, 0, 0, 0);
-      // ローカル時間をUTC時間に変換して保存
-      const nextRunAt = new Date(nextRunAtLocal.getTime());
+      // 次回実行予定日時を更新（日本時間で計算してからUTCに変換）
+      const nextJSTDate = new Date(nowLocal);
+      nextJSTDate.setDate(nextJSTDate.getDate() + schedule.intervalDays);
+      nextJSTDate.setHours(executeHour, 0, 0, 0);
+      // 日本時間をUTC時刻に変換して保存（calculateNextRunAtと同じロジック）
+      const nextRunAt = new Date(Date.UTC(
+        nextJSTDate.getFullYear(),
+        nextJSTDate.getMonth(),
+        nextJSTDate.getDate(),
+        executeHour - 9, // JST→UTC変換
+        0,
+        0
+      ));
       
       // Update last run time
       await db.update(scheduleSettings)
@@ -893,13 +914,12 @@ export async function checkAndRunSchedules() {
     const scheduleId = schedule.id;
     const executeHour = schedule.executeHour ?? 9;
     
-    // nextRunAtをローカル時間として解釈
-    // データベースにはUTC時間で保存されているが、ローカル時間として扱う
-    let nextRunAtLocal: Date | null = null;
+    // nextRunAtはUTC時刻として保存されているので、UTC時刻として扱う
+    let nextRunAtUTC: Date | null = null;
     if (schedule.nextRunAt) {
-      const nextRunAtUTC = new Date(schedule.nextRunAt);
-      // UTC時間を指定されたタイムゾーンのローカル時間に変換
-      // nextRunAtは本来ローカル時間で設定されているため、UTCとして保存されているものをローカル時間として解釈
+      nextRunAtUTC = new Date(schedule.nextRunAt);
+      
+      // デバッグ用：nextRunAtを日本時間で表示
       const formatter = new Intl.DateTimeFormat('en-US', {
         timeZone: timezone,
         year: 'numeric',
@@ -910,20 +930,13 @@ export async function checkAndRunSchedules() {
         second: '2-digit',
         hour12: false,
       });
-      const parts = formatter.formatToParts(nextRunAtUTC);
-      nextRunAtLocal = new Date(
-        parseInt(parts.find(p => p.type === 'year')!.value),
-        parseInt(parts.find(p => p.type === 'month')!.value) - 1,
-        parseInt(parts.find(p => p.type === 'day')!.value),
-        parseInt(parts.find(p => p.type === 'hour')!.value),
-        parseInt(parts.find(p => p.type === 'minute')!.value),
-        parseInt(parts.find(p => p.type === 'second')!.value)
-      );
+      const nextRunAtJSTStr = formatter.format(nextRunAtUTC);
+      console.log(`[Scheduler] Creative schedule ${scheduleId}: nextRunAt UTC=${nextRunAtUTC.toISOString()}, JST=${nextRunAtJSTStr}`);
     }
     
-    // nextRunAtが設定されている場合、まだ来ていない場合はスキップ
-    if (nextRunAtLocal && nextRunAtLocal.getTime() > nowLocal.getTime()) {
-      const timeDiff = nextRunAtLocal.getTime() - nowLocal.getTime();
+    // nextRunAtが設定されている場合、まだ来ていない場合はスキップ（UTC時刻で比較）
+    if (nextRunAtUTC && nextRunAtUTC.getTime() > nowUTC.getTime()) {
+      const timeDiff = nextRunAtUTC.getTime() - nowUTC.getTime();
       const minutesDiff = Math.floor(timeDiff / 1000 / 60);
       console.log(`[Scheduler] Creative schedule ${scheduleId}: nextRunAt is in the future (${minutesDiff} minutes later), skipping`);
       continue;
@@ -931,15 +944,20 @@ export async function checkAndRunSchedules() {
     
     // nextRunAtが設定されていない場合、実行時刻が一致しない場合はスキップ
     // 実行時刻が一致しなくても、nextRunAtが過ぎている場合は実行する（Cronジョブの実行遅延を考慮）
-    if (!nextRunAtLocal && (currentHour !== executeHour || currentMinute > 5)) {
+    if (!nextRunAtUTC && (currentHour !== executeHour || currentMinute > 5)) {
       console.log(`[Scheduler] Creative schedule ${scheduleId}: execution hour doesn't match (current: ${currentHour}:${currentMinute.toString().padStart(2, '0')}, executeHour: ${executeHour}), skipping`);
       continue;
     }
     
     // nextRunAtが設定されているが、実行時刻が大きく外れている場合（±1時間以上）はスキップ
-    if (nextRunAtLocal) {
+    // ただし、nextRunAtが既に過ぎている場合は実行する（Cronジョブの実行遅延を考慮）
+    if (nextRunAtUTC) {
       const hourDiff = Math.abs(currentHour - executeHour);
-      if (hourDiff > 1 && hourDiff < 23) {
+      // nextRunAtが既に過ぎている場合は実行（時刻のずれを許容）
+      if (nextRunAtUTC.getTime() <= nowUTC.getTime()) {
+        // nextRunAtが過ぎているので実行を続ける
+        console.log(`[Scheduler] Creative schedule ${scheduleId}: nextRunAt has passed, will execute (current JST: ${currentHour}:${currentMinute.toString().padStart(2, '0')}, executeHour: ${executeHour})`);
+      } else if (hourDiff > 1 && hourDiff < 23) {
         console.log(`[Scheduler] Creative schedule ${scheduleId}: execution hour is too far from executeHour (current: ${currentHour}:${currentMinute.toString().padStart(2, '0')}, executeHour: ${executeHour}), skipping`);
         continue;
       }
@@ -952,16 +970,26 @@ export async function checkAndRunSchedules() {
     }
     
     // nextRunAtが過ぎている場合は、即座に次回実行予定日時を更新して、重複実行を防ぐ
-    if (nextRunAtLocal && nextRunAtLocal.getTime() <= nowLocal.getTime()) {
-      const nextRunAtLocalCalc = new Date(nowLocal);
-      nextRunAtLocalCalc.setDate(nextRunAtLocalCalc.getDate() + schedule.intervalDays);
-      nextRunAtLocalCalc.setHours(executeHour, 0, 0, 0);
-      // ローカル時間をUTC時間に変換して保存
-      const nextRunAt = new Date(nextRunAtLocalCalc.getTime());
+    if (nextRunAtUTC && nextRunAtUTC.getTime() <= nowUTC.getTime()) {
+      // 日本時間での次回実行予定日時を計算
+      const nextJSTDate = new Date(nowLocal);
+      nextJSTDate.setDate(nextJSTDate.getDate() + schedule.intervalDays);
+      nextJSTDate.setHours(executeHour, 0, 0, 0);
+      
+      // 日本時間をUTC時刻に変換して保存（calculateNextRunAtと同じロジック）
+      const nextRunAt = new Date(Date.UTC(
+        nextJSTDate.getFullYear(),
+        nextJSTDate.getMonth(),
+        nextJSTDate.getDate(),
+        executeHour - 9, // JST→UTC変換
+        0,
+        0
+      ));
+      
       await db.update(creativeScheduleSettings)
         .set({ nextRunAt })
         .where(eq(creativeScheduleSettings.id, scheduleId));
-      console.log(`[Scheduler] Updated nextRunAt to ${nextRunAt.toISOString()} (local: ${nextRunAtLocalCalc.toISOString()}) to prevent duplicate execution`);
+      console.log(`[Scheduler] Updated nextRunAt to ${nextRunAt.toISOString()} (JST: ${nextJSTDate.getFullYear()}-${String(nextJSTDate.getMonth() + 1).padStart(2, '0')}-${String(nextJSTDate.getDate()).padStart(2, '0')} ${String(executeHour).padStart(2, '0')}:00) to prevent duplicate execution`);
     }
     
     // 実行中フラグを設定
@@ -986,12 +1014,19 @@ export async function checkAndRunSchedules() {
       
       if (targetCreatives.length === 0) {
         console.log(`[Scheduler] No creatives to monitor for user ${schedule.userId}`);
-        // 次回実行予定日時を更新（ローカル時間で計算してからUTCに変換）
-        const nextRunAtLocalCalc = new Date(nowLocal);
-        nextRunAtLocalCalc.setDate(nextRunAtLocalCalc.getDate() + schedule.intervalDays);
-        nextRunAtLocalCalc.setHours(executeHour, 0, 0, 0);
-        // ローカル時間をUTC時間に変換して保存
-        const nextRunAt = new Date(nextRunAtLocalCalc.getTime());
+        // 次回実行予定日時を更新（日本時間で計算してからUTCに変換）
+        const nextJSTDate = new Date(nowLocal);
+        nextJSTDate.setDate(nextJSTDate.getDate() + schedule.intervalDays);
+        nextJSTDate.setHours(executeHour, 0, 0, 0);
+        // 日本時間をUTC時刻に変換して保存（calculateNextRunAtと同じロジック）
+        const nextRunAt = new Date(Date.UTC(
+          nextJSTDate.getFullYear(),
+          nextJSTDate.getMonth(),
+          nextJSTDate.getDate(),
+          executeHour - 9, // JST→UTC変換
+          0,
+          0
+        ));
         await db.update(creativeScheduleSettings)
           .set({ 
             lastRunAt: nowLocal,
@@ -1028,12 +1063,19 @@ export async function checkAndRunSchedules() {
       
       await Promise.all(monitoringPromises);
       
-      // 次回実行予定日時を更新（ローカル時間で計算してからUTCに変換）
-      const nextRunAtLocal = new Date(nowLocal);
-      nextRunAtLocal.setDate(nextRunAtLocal.getDate() + schedule.intervalDays);
-      nextRunAtLocal.setHours(executeHour, 0, 0, 0);
-      // ローカル時間をUTC時間に変換して保存
-      const nextRunAt = new Date(nextRunAtLocal.getTime());
+      // 次回実行予定日時を更新（日本時間で計算してからUTCに変換）
+      const nextJSTDate = new Date(nowLocal);
+      nextJSTDate.setDate(nextJSTDate.getDate() + schedule.intervalDays);
+      nextJSTDate.setHours(executeHour, 0, 0, 0);
+      // 日本時間をUTC時刻に変換して保存（calculateNextRunAtと同じロジック）
+      const nextRunAt = new Date(Date.UTC(
+        nextJSTDate.getFullYear(),
+        nextJSTDate.getMonth(),
+        nextJSTDate.getDate(),
+        executeHour - 9, // JST→UTC変換
+        0,
+        0
+      ));
       
       // Update last run time
       await db.update(creativeScheduleSettings)
