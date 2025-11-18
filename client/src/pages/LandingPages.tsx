@@ -11,10 +11,11 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Loader2, Plus, Trash2, Eye, RefreshCw, Search, X, Pencil, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle } from "lucide-react";
+import { Loader2, Plus, Trash2, Eye, RefreshCw, Search, X, Pencil, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, Clock } from "lucide-react";
 import { useLocation } from "wouter";
 import { LPTagSelector } from "@/components/LPTagSelector";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { Progress } from "@/components/ui/progress";
 
 export default function LandingPages() {
   const [, setLocation] = useLocation();
@@ -48,6 +49,13 @@ export default function LandingPages() {
     onSuccess: () => {
       utils.schedules.get.invalidate();
     },
+  });
+  
+  // 手動監視のクォータ状況を取得
+  const { data: quotaData } = trpc.manualMonitoringQuota.get.useQuery(undefined, {
+    staleTime: 0, // 常に最新を取得
+    refetchInterval: 60000, // 60秒ごとに自動更新
+    refetchOnWindowFocus: true,
   });
   
   // プラン設定
@@ -448,9 +456,11 @@ export default function LandingPages() {
             toast.success(summaryMessage, { duration: 5000 });
           }
 
-          // 監視履歴を更新（全LPの履歴を無効化して履歴ページで最新情報が表示されるように）
-          utils.monitoring.history.invalidate();
-          utils.monitoring.recent.invalidate();
+      // 監視履歴を更新（全LPの履歴を無効化して履歴ページで最新情報が表示されるように）
+      utils.monitoring.history.invalidate();
+      utils.monitoring.recent.invalidate();
+      // クォータ情報も更新
+      utils.manualMonitoringQuota.get.invalidate();
           
           // 各LPの履歴も個別に無効化（履歴ページで最新情報が表示されるように）
           targetLpIds.forEach((lpId) => {

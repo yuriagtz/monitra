@@ -5,8 +5,8 @@ import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import * as db from "./db";
 import { getDb } from "./db";
-import { users, monitoringHistory } from "../drizzle/schema";
-import { eq, inArray, desc } from "drizzle-orm";
+import { users, monitoringHistory, manualMonitoringQuota } from "../drizzle/schema";
+import { eq, inArray, desc, and } from "drizzle-orm";
 import { monitorLandingPage, monitorCreative } from "./monitoring";
 import bcrypt from 'bcrypt';
 
@@ -490,6 +490,19 @@ export const appRouter = router({
           throw new Error("Not found or unauthorized");
         }
         
+        // 手動監視の制限をチェック
+        const userPlan = (ctx.user.plan as "free" | "light" | "pro" | "admin") || "free";
+        const quotaCheck = await db.checkAndRecordManualMonitoring(
+          ctx.user.id,
+          landingPage.id,
+          "lp",
+          userPlan
+        );
+        
+        if (!quotaCheck.allowed) {
+          throw new Error(quotaCheck.error || "手動監視の制限により実行できません");
+        }
+        
         // 監視を実行して完了を待つ（タイムアウト: 2分）
         try {
           const result = await Promise.race([
@@ -529,13 +542,77 @@ export const appRouter = router({
           throw new Error("監視対象のLPがありません");
         }
         
+        // 手動監視の制限をチェック（各LPごと）
+        const userPlan = (ctx.user.plan as "free" | "light" | "pro" | "admin") || "free";
+        const { PLAN_CONFIG } = await import('./_core/plan');
+        const planConfig = PLAN_CONFIG[userPlan];
+        
+        // 1日の実行回数制限をチェック（全件監視は複数の実行としてカウント）
+        if (planConfig.maxDailyManualMonitorCount !== null) {
+          const now = new Date();
+          const today = now.toISOString().split("T")[0];
+          const database = await db.getDb();
+          if (!database) {
+            throw new Error("Database not available");
+          }
+          
+          const dailyQuota = await database
+            .select()
+            .from(manualMonitoringQuota)
+            .where(
+              and(
+                eq(manualMonitoringQuota.userId, ctx.user.id),
+                eq(manualMonitoringQuota.date, today),
+                eq(manualMonitoringQuota.targetId, -1) // 日次カウント用ダミーID
+              )
+            )
+            .limit(1);
+          
+          const currentCount = dailyQuota.length > 0 ? (dailyQuota[0].count || 0) : 0;
+          const remainingQuota = planConfig.maxDailyManualMonitorCount - currentCount;
+          
+          if (remainingQuota <= 0) {
+            throw new Error(`${planConfig.name}では、1日の手動監視実行回数は${planConfig.maxDailyManualMonitorCount}回までです。本日の上限に達しています。`);
+          }
+          
+          // 残りクォータがLP数より少ない場合は、実行可能なLP数のみ監視
+          const executableCount = Math.min(allLandingPages.length, remainingQuota);
+          if (executableCount < allLandingPages.length) {
+            // 制限がある場合は警告メッセージを返す
+            return {
+              success: true,
+              message: `${executableCount}件のLPの監視を開始しました（残りクォータ: ${remainingQuota}回）`,
+              count: executableCount,
+              warning: `${planConfig.name}では、1日の手動監視実行回数は${planConfig.maxDailyManualMonitorCount}回までです。本日は残り${remainingQuota}回のみ実行可能です。`,
+            };
+          }
+        }
+        
         // すべてのLPをバックグラウンドで監視実行（非同期）
         // 注意: 完了を待たずに即座にレスポンスを返す（クライアント側でポーリング）
-        const monitoringPromises = allLandingPages.map((landingPage) => {
-          return monitorLandingPage(landingPage.id).catch((error) => {
-            console.error(`[LP Monitor All] Failed to monitor LP ${landingPage.id} (${landingPage.url}):`, error);
-            return null; // エラーがあっても他のLPの監視は続行
-          });
+        const monitoringPromises = allLandingPages.map(async (landingPage) => {
+          // 各LPごとに制限チェックと記録
+          try {
+            const quotaCheck = await db.checkAndRecordManualMonitoring(
+              ctx.user.id,
+              landingPage.id,
+              "lp",
+              userPlan
+            );
+            
+            if (!quotaCheck.allowed) {
+              console.warn(`[LP Monitor All] Skipped LP ${landingPage.id} due to quota limit: ${quotaCheck.error}`);
+              return null; // 制限によりスキップ
+            }
+            
+            return await monitorLandingPage(landingPage.id).catch((error) => {
+              console.error(`[LP Monitor All] Failed to monitor LP ${landingPage.id} (${landingPage.url}):`, error);
+              return null; // エラーがあっても他のLPの監視は続行
+            });
+          } catch (error) {
+            console.error(`[LP Monitor All] Error checking quota for LP ${landingPage.id}:`, error);
+            return null;
+          }
         });
         
         // 非同期で実行開始（完了は待たない）
@@ -555,6 +632,13 @@ export const appRouter = router({
       }),
   }),
   
+  manualMonitoringQuota: router({
+    get: protectedProcedure.query(async ({ ctx }) => {
+      const userPlan = (ctx.user.plan as "free" | "light" | "pro" | "admin") || "free";
+      return await db.getManualMonitoringQuota(ctx.user.id, userPlan);
+    }),
+  }),
+
   tags: router({
     list: protectedProcedure.query(async ({ ctx }) => {
       // LP用・クリエイティブ用すべてを返す（フロント側で種別ごとにフィルタ）
@@ -1014,6 +1098,19 @@ export const appRouter = router({
           throw new Error("Not found or unauthorized");
         }
 
+        // 手動監視の制限をチェック
+        const userPlan = (ctx.user.plan as "free" | "light" | "pro" | "admin") || "free";
+        const quotaCheck = await db.checkAndRecordManualMonitoring(
+          ctx.user.id,
+          creative.id,
+          "creative",
+          userPlan
+        );
+        
+        if (!quotaCheck.allowed) {
+          throw new Error(quotaCheck.error || "手動監視の制限により実行できません");
+        }
+
         const result = await monitorCreative(input.id);
 
         return { success: true, result };
@@ -1027,15 +1124,79 @@ export const appRouter = router({
         throw new Error("監視対象のクリエイティブがありません");
       }
 
-      const monitoringPromises = creatives.map((c) =>
-        monitorCreative(c.id).catch((error) => {
-          console.error(
-            `[Creative Monitor All] Failed to monitor creative ${c.id}:`,
-            error
+      // 手動監視の制限をチェック（各クリエイティブごと）
+      const userPlan = (ctx.user.plan as "free" | "light" | "pro" | "admin") || "free";
+      const { PLAN_CONFIG } = await import('./_core/plan');
+      const planConfig = PLAN_CONFIG[userPlan];
+      
+      // 1日の実行回数制限をチェック（全件監視は複数の実行としてカウント）
+      if (planConfig.maxDailyManualMonitorCount !== null) {
+        const now = new Date();
+        const today = now.toISOString().split("T")[0];
+        const database = await db.getDb();
+        if (!database) {
+          throw new Error("Database not available");
+        }
+        
+        const dailyQuota = await database
+          .select()
+          .from(manualMonitoringQuota)
+          .where(
+            and(
+              eq(manualMonitoringQuota.userId, ctx.user.id),
+              eq(manualMonitoringQuota.date, today),
+              eq(manualMonitoringQuota.targetId, -1) // 日次カウント用ダミーID
+            )
+          )
+          .limit(1);
+        
+        const currentCount = dailyQuota.length > 0 ? (dailyQuota[0].count || 0) : 0;
+        const remainingQuota = planConfig.maxDailyManualMonitorCount - currentCount;
+        
+        if (remainingQuota <= 0) {
+          throw new Error(`${planConfig.name}では、1日の手動監視実行回数は${planConfig.maxDailyManualMonitorCount}回までです。本日の上限に達しています。`);
+        }
+        
+        // 残りクォータがクリエイティブ数より少ない場合は、実行可能な数のみ監視
+        const executableCount = Math.min(creatives.length, remainingQuota);
+        if (executableCount < creatives.length) {
+          // 制限がある場合は警告メッセージを返す
+          return {
+            success: true,
+            message: `${executableCount}件のクリエイティブの監視を開始しました（残りクォータ: ${remainingQuota}回）`,
+            count: executableCount,
+            warning: `${planConfig.name}では、1日の手動監視実行回数は${planConfig.maxDailyManualMonitorCount}回までです。本日は残り${remainingQuota}回のみ実行可能です。`,
+          };
+        }
+      }
+
+      const monitoringPromises = creatives.map(async (c) => {
+        // 各クリエイティブごとに制限チェックと記録
+        try {
+          const quotaCheck = await db.checkAndRecordManualMonitoring(
+            ctx.user.id,
+            c.id,
+            "creative",
+            userPlan
           );
+          
+          if (!quotaCheck.allowed) {
+            console.warn(`[Creative Monitor All] Skipped creative ${c.id} due to quota limit: ${quotaCheck.error}`);
+            return null; // 制限によりスキップ
+          }
+          
+          return await monitorCreative(c.id).catch((error) => {
+            console.error(
+              `[Creative Monitor All] Failed to monitor creative ${c.id}:`,
+              error
+            );
+            return null;
+          });
+        } catch (error) {
+          console.error(`[Creative Monitor All] Error checking quota for creative ${c.id}:`, error);
           return null;
-        })
-      );
+        }
+      });
 
       // 完了は待つが、エラーがあっても全体は継続
       await Promise.all(monitoringPromises);

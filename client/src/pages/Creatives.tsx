@@ -45,10 +45,12 @@ import {
   Search,
   X,
   AlertTriangle,
+  Clock,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { CreativeTagSelector } from "@/components/CreativeTagSelector";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { Progress } from "@/components/ui/progress";
 
 type CreativeFormState = {
   title: string;

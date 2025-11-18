@@ -10,24 +10,28 @@ export const PLAN_CONFIG = {
     minIntervalDays: 3, // 最小3日に1回
     maxLpCount: 3, // 最大LP登録数
     maxCreativeCount: 10, // 最大クリエイティブ登録数
+    maxDailyManualMonitorCount: 10, // 1日の手動監視実行回数制限
   },
   light: {
     name: "ライトプラン",
     minIntervalDays: 3,
     maxLpCount: 15,
     maxCreativeCount: 50,
+    maxDailyManualMonitorCount: 50, // 1日の手動監視実行回数制限
   },
   pro: {
     name: "プロプラン",
     minIntervalDays: 1, // 最小1日に1回
     maxLpCount: null, // 無制限
     maxCreativeCount: null, // 無制限
+    maxDailyManualMonitorCount: 200, // 1日の手動監視実行回数制限
   },
   admin: {
     name: "管理者プラン",
     minIntervalDays: 1, // 最小1日に1回（管理者は最短間隔も使用可能）
     maxLpCount: null, // 無制限
     maxCreativeCount: null, // 無制限
+    maxDailyManualMonitorCount: null, // 無制限
   },
 } as const;
 

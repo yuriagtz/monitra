@@ -284,3 +284,22 @@ export const exportHistory = pgTable("export_history", {
 
 export type ExportHistory = typeof exportHistory.$inferSelect;
 export type InsertExportHistory = typeof exportHistory.$inferInsert;
+
+/**
+ * Manual monitoring quota table
+ * Tracks manual monitoring execution limits and history
+ */
+export const manualMonitoringQuota = pgTable("manual_monitoring_quota", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  targetId: integer("target_id").notNull(), // LP ID or Creative ID
+  targetType: varchar("target_type", { length: 16 }).notNull(), // "lp" | "creative"
+  lastMonitoredAt: timestamp("last_monitored_at").notNull(), // 最後の手動監視実行時刻（最短間隔チェック用）
+  date: varchar("date", { length: 10 }).notNull(), // YYYY-MM-DD形式の日付（日次カウント用）
+  count: integer("count").default(0).notNull(), // 当日の実行回数（ユーザー全体の合計）
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+});
+
+export type ManualMonitoringQuota = typeof manualMonitoringQuota.$inferSelect;
+export type InsertManualMonitoringQuota = typeof manualMonitoringQuota.$inferInsert;

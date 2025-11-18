@@ -1,4 +1,4 @@
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { 
@@ -28,6 +28,8 @@ import {
   type InsertCreative,
   creativeScheduleSettings,
   type InsertCreativeScheduleSetting,
+  manualMonitoringQuota,
+  type InsertManualMonitoringQuota,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -782,4 +784,184 @@ export async function getNotificationHistoryByUserId(userId: number, limit: numb
     .where(eq(notificationHistory.userId, userId))
     .orderBy(desc(notificationHistory.createdAt))
     .limit(limit);
+}
+
+/**
+ * 手動監視の制限をチェックし、実行を記録する
+ * @param userId ユーザーID
+ * @param targetId 対象ID（LP ID または Creative ID）
+ * @param targetType 対象タイプ（"lp" または "creative"）
+ * @param plan ユーザーのプラン
+ * @returns { allowed: boolean, error?: string } 許可されるかどうかとエラーメッセージ
+ */
+export async function checkAndRecordManualMonitoring(
+  userId: number,
+  targetId: number,
+  targetType: "lp" | "creative",
+  plan: "free" | "light" | "pro" | "admin"
+): Promise<{ allowed: boolean; error?: string }> {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  const { PLAN_CONFIG } = await import("./_core/plan");
+  const planConfig = PLAN_CONFIG[plan];
+  const now = new Date();
+  const today = now.toISOString().split("T")[0]; // YYYY-MM-DD
+  const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000); // 1時間前
+
+  // 1. 同一対象への最短間隔チェック（管理者プラン以外: 1時間）
+  if (plan !== "admin") {
+    const existingQuota = await db
+      .select()
+      .from(manualMonitoringQuota)
+      .where(
+        and(
+          eq(manualMonitoringQuota.userId, userId),
+          eq(manualMonitoringQuota.targetId, targetId),
+          eq(manualMonitoringQuota.targetType, targetType)
+        )
+      )
+      .orderBy(desc(manualMonitoringQuota.lastMonitoredAt))
+      .limit(1);
+
+    if (existingQuota.length > 0 && existingQuota[0].lastMonitoredAt) {
+      const lastMonitoredAt = new Date(existingQuota[0].lastMonitoredAt);
+      if (lastMonitoredAt > oneHourAgo) {
+        const minutesRemaining = Math.ceil((lastMonitoredAt.getTime() + 60 * 60 * 1000 - now.getTime()) / (1000 * 60));
+        return {
+          allowed: false,
+          error: `同一対象への手動監視は1時間に1回までです。あと${minutesRemaining}分お待ちください。`,
+        };
+      }
+    }
+  }
+
+  // 2. 1日の実行回数制限チェック（プラン別）
+  if (planConfig.maxDailyManualMonitorCount !== null) {
+    // 日次カウント用のレコード（targetId = -1 をダミーとして使用）
+    const dailyQuota = await db
+      .select()
+      .from(manualMonitoringQuota)
+      .where(
+        and(
+          eq(manualMonitoringQuota.userId, userId),
+          eq(manualMonitoringQuota.date, today),
+          eq(manualMonitoringQuota.targetId, -1) // 日次カウント用ダミーID
+        )
+      )
+      .limit(1);
+
+    const currentCount = dailyQuota.length > 0 ? (dailyQuota[0].count || 0) : 0;
+
+    if (currentCount >= planConfig.maxDailyManualMonitorCount) {
+      return {
+        allowed: false,
+        error: `${planConfig.name}では、1日の手動監視実行回数は${planConfig.maxDailyManualMonitorCount}回までです。本日の上限に達しています。`,
+      };
+    }
+
+    // 日次カウントを更新または作成
+    if (dailyQuota.length > 0) {
+      await db
+        .update(manualMonitoringQuota)
+        .set({
+          count: currentCount + 1,
+          updatedAt: now,
+        })
+        .where(eq(manualMonitoringQuota.id, dailyQuota[0].id));
+    } else {
+      // 当日の日次カウントレコードがない場合は作成
+      await db.insert(manualMonitoringQuota).values({
+        userId,
+        targetId: -1, // ダミーID（日次カウント用）
+        targetType: "lp", // ダミータイプ（日次カウント用）
+        lastMonitoredAt: now,
+        date: today,
+        count: 1,
+      });
+    }
+  }
+
+  // 3. 対象ごとの最終実行時刻を更新または作成（最短間隔チェック用）
+  const todayTargetQuota = await db
+    .select()
+    .from(manualMonitoringQuota)
+    .where(
+      and(
+        eq(manualMonitoringQuota.userId, userId),
+        eq(manualMonitoringQuota.targetId, targetId),
+        eq(manualMonitoringQuota.targetType, targetType),
+        eq(manualMonitoringQuota.date, today)
+      )
+    )
+    .limit(1);
+
+  if (todayTargetQuota.length > 0) {
+    // 今日の対象レコードがあれば、それを更新
+    await db
+      .update(manualMonitoringQuota)
+      .set({
+        lastMonitoredAt: now,
+        updatedAt: now,
+      })
+      .where(eq(manualMonitoringQuota.id, todayTargetQuota[0].id));
+  } else {
+    // 今日の対象レコードがない場合は新規作成
+    await db.insert(manualMonitoringQuota).values({
+      userId,
+      targetId,
+      targetType,
+      lastMonitoredAt: now,
+      date: today,
+      count: 0, // 対象ごとのレコードはカウントを持たない（日次カウント用レコードで管理）
+    });
+  }
+
+  return { allowed: true };
+}
+
+/**
+ * 手動監視のクォータ状況を取得
+ * @param userId ユーザーID
+ * @param plan ユーザーのプラン
+ * @returns { currentCount: number, maxCount: number | null, remainingCount: number | null }
+ */
+export async function getManualMonitoringQuota(
+  userId: number,
+  plan: "free" | "light" | "pro" | "admin"
+): Promise<{ currentCount: number; maxCount: number | null; remainingCount: number | null }> {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  const { PLAN_CONFIG } = await import("./_core/plan");
+  const planConfig = PLAN_CONFIG[plan];
+  const now = new Date();
+  const today = now.toISOString().split("T")[0]; // YYYY-MM-DD
+
+  // 日次カウント用のレコード（targetId = -1）
+  const dailyQuota = await db
+    .select()
+    .from(manualMonitoringQuota)
+    .where(
+      and(
+        eq(manualMonitoringQuota.userId, userId),
+        eq(manualMonitoringQuota.date, today),
+        eq(manualMonitoringQuota.targetId, -1) // 日次カウント用ダミーID
+      )
+    )
+    .limit(1);
+
+  const currentCount = dailyQuota.length > 0 ? (dailyQuota[0].count || 0) : 0;
+  const maxCount = planConfig.maxDailyManualMonitorCount;
+  const remainingCount = maxCount !== null ? Math.max(0, maxCount - currentCount) : null;
+
+  return {
+    currentCount,
+    maxCount,
+    remainingCount,
+  };
 }
