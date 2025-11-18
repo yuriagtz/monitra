@@ -16,6 +16,7 @@ import { useLocation } from "wouter";
 import { LPTagSelector } from "@/components/LPTagSelector";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Progress } from "@/components/ui/progress";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export default function LandingPages() {
   const [, setLocation] = useLocation();
@@ -174,6 +175,44 @@ export default function LandingPages() {
     const diffTime = now.getTime() - lastChangeDate.getTime();
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
+  };
+  
+  // 1時間以内に監視実行されたLPを判定する関数
+  const isLpRecentlyMonitored = useMemo(() => {
+    const map = new Map<number, boolean>();
+    if (!landingPages || !recentHistory || user?.plan === "admin") {
+      // 管理者プランは制限なし
+      return map;
+    }
+    
+    const oneHourAgo = Date.now() - 60 * 60 * 1000;
+    
+    landingPages.forEach((landingPage) => {
+      const status = lpStatusMap.get(landingPage.id);
+      if (status?.createdAt) {
+        const lastMonitoredAt = new Date(status.createdAt).getTime();
+        if (lastMonitoredAt > oneHourAgo) {
+          map.set(landingPage.id, true);
+        }
+      }
+    });
+    
+    return map;
+  }, [landingPages, recentHistory, lpStatusMap, user?.plan]);
+  
+  // 1時間以内に監視実行されたLPの制限メッセージを取得
+  const getLpRestrictionMessage = (landingPageId: number): string | null => {
+    if (user?.plan === "admin") return null; // 管理者プランは制限なし
+    if (!isLpRecentlyMonitored.has(landingPageId)) return null;
+    
+    const status = lpStatusMap.get(landingPageId);
+    if (!status?.createdAt) return null;
+    
+    const lastMonitoredAt = new Date(status.createdAt).getTime();
+    const now = Date.now();
+    const minutesRemaining = Math.ceil((lastMonitoredAt + 60 * 60 * 1000 - now) / (1000 * 60));
+    
+    return `同一対象への手動監視は1時間に1回までです。あと${minutesRemaining}分お待ちください。`;
   };
   
   const createMutation = trpc.landingPages.create.useMutation({
@@ -398,12 +437,31 @@ export default function LandingPages() {
       // 各LPの最新監視履歴を取得
       try {
         const completedLpIds = new Set<number>();
+        const skippedLpIds = new Set<number>();
         const results: Array<{ lpId: number; status: string }> = [];
+        
+        const oneHourAgo = Date.now() - 60 * 60 * 1000;
         
         // 各LPの監視履歴を並列で取得（キャッシュを無効化して強制的に再取得）
         await Promise.all(
           targetLandingPageIds.map(async (lpId) => {
             try {
+              // 1時間以内に監視実行されたLPはスキップとして扱う（管理者プランを除く）
+              if (user?.plan !== "admin") {
+                const status = lpStatusMap.get(lpId);
+                if (status?.createdAt) {
+                  const lastMonitoredAt = new Date(status.createdAt).getTime();
+                  if (lastMonitoredAt > oneHourAgo) {
+                    // 開始時刻より前に監視されたものはスキップとして扱う
+                    if (lastMonitoredAt < startTime) {
+                      skippedLpIds.add(lpId);
+                      console.log(`[Monitor All] LP ${lpId} skipped (monitored within 1 hour before start)`);
+                      return;
+                    }
+                  }
+                }
+              }
+              
               // キャッシュを無効化してから取得
               utils.monitoring.history.invalidate({ landingPageId: lpId });
               const history = await utils.monitoring.history.fetch(
@@ -433,10 +491,11 @@ export default function LandingPages() {
           })
         );
 
-        console.log(`[Monitor All] Progress: ${completedLpIds.size}/${expectedLpCountRef.current} LPs completed`);
+        const totalProcessed = completedLpIds.size + skippedLpIds.size;
+        console.log(`[Monitor All] Progress: ${completedLpIds.size} completed, ${skippedLpIds.size} skipped, total ${totalProcessed}/${expectedLpCountRef.current}`);
 
-        // 全LPの監視が完了したかチェック
-        if (completedLpIds.size >= expectedLpCountRef.current) {
+        // 全LPの監視が完了したかチェック（スキップされたものも含める）
+        if (totalProcessed >= expectedLpCountRef.current) {
           console.log(`[Monitor All] ✅ All monitoring completed!`);
           clearInterval(checkInterval);
           setIsMonitoringAll(false);
@@ -448,9 +507,13 @@ export default function LandingPages() {
           const okCount = results.filter((r) => r.status === "ok").length;
           const changedCount = results.filter((r) => r.status === "changed").length;
           const errorCount = results.filter((r) => r.status === "error").length;
+          const skippedCount = skippedLpIds.size;
 
           // サマリー通知
-          const summaryMessage = `全監視実行が完了しました。\n正常: ${okCount}件、変更検出: ${changedCount}件、エラー: ${errorCount}件`;
+          let summaryMessage = `全監視実行が完了しました。\n正常: ${okCount}件、変更検出: ${changedCount}件、エラー: ${errorCount}件`;
+          if (skippedCount > 0) {
+            summaryMessage += `、スキップ: ${skippedCount}件（1時間以内に監視実行済み）`;
+          }
 
           if (errorCount > 0 || changedCount > 0) {
             toast.warning(summaryMessage, { duration: 5000 });
@@ -477,7 +540,7 @@ export default function LandingPages() {
     return () => {
       clearInterval(checkInterval);
     };
-  }, [isMonitoringAll, landingPages, utils]);
+  }, [isMonitoringAll, landingPages, utils, user?.plan, lpStatusMap]);
 
   // Filter, search, and sort logic
   const filteredAndSortedLandingPages = useMemo(() => {
@@ -1199,15 +1262,39 @@ export default function LandingPages() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleMonitor(landingPage.id)}
-                            disabled={monitoringLpIds.has(landingPage.id) || monitorAllMutation.isPending}
-                            title={monitoringLpIds.has(landingPage.id) || monitorAllMutation.isPending ? "監視実行中..." : "監視を実行"}
-                          >
-                            <RefreshCw className={`w-4 h-4 ${monitoringLpIds.has(landingPage.id) || monitorAllMutation.isPending ? 'animate-spin' : ''}`} />
-                          </Button>
+                          {(() => {
+                            const isDisabled = monitoringLpIds.has(landingPage.id) || monitorAllMutation.isPending || isLpRecentlyMonitored.has(landingPage.id);
+                            const restrictionMessage = getLpRestrictionMessage(landingPage.id);
+                            const button = (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleMonitor(landingPage.id)}
+                                disabled={isDisabled}
+                                title={
+                                  monitoringLpIds.has(landingPage.id) || monitorAllMutation.isPending
+                                    ? "監視実行中..."
+                                    : restrictionMessage || "監視を実行"
+                                }
+                              >
+                                <RefreshCw className={`w-4 h-4 ${monitoringLpIds.has(landingPage.id) || monitorAllMutation.isPending ? 'animate-spin' : ''}`} />
+                              </Button>
+                            );
+                            
+                            if (restrictionMessage) {
+                              return (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    {button}
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>{restrictionMessage}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              );
+                            }
+                            return button;
+                          })()}
                           <Button
                             variant="ghost"
                             size="sm"

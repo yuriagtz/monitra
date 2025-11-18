@@ -51,6 +51,7 @@ import { useLocation } from "wouter";
 import { CreativeTagSelector } from "@/components/CreativeTagSelector";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Progress } from "@/components/ui/progress";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 type CreativeFormState = {
   title: string;
@@ -391,12 +392,31 @@ export default function Creatives() {
       // 各クリエイティブの最新監視履歴を取得
       try {
         const completedCreativeIds = new Set<number>();
+        const skippedCreativeIds = new Set<number>();
         const results: Array<{ creativeId: number; status: string }> = [];
+        
+        const oneHourAgo = Date.now() - 60 * 60 * 1000;
         
         // 各クリエイティブの監視履歴を並列で取得（キャッシュを無効化して強制的に再取得）
         await Promise.all(
           targetCreativeIds.map(async (creativeId) => {
             try {
+              // 1時間以内に監視実行されたクリエイティブはスキップとして扱う（管理者プランを除く）
+              if (user?.plan !== "admin") {
+                const status = creativeStatusMap.get(creativeId);
+                if (status?.createdAt) {
+                  const lastMonitoredAt = new Date(status.createdAt).getTime();
+                  if (lastMonitoredAt > oneHourAgo) {
+                    // 開始時刻より前に監視されたものはスキップとして扱う
+                    if (lastMonitoredAt < startTime) {
+                      skippedCreativeIds.add(creativeId);
+                      console.log(`[Monitor All] Creative ${creativeId} skipped (monitored within 1 hour before start)`);
+                      return;
+                    }
+                  }
+                }
+              }
+              
               // キャッシュを無効化してから取得
               utils.creatives.history.invalidate({ creativeId });
               const history = await utils.creatives.history.fetch(
@@ -426,10 +446,11 @@ export default function Creatives() {
           })
         );
 
-        console.log(`[Monitor All] Progress: ${completedCreativeIds.size}/${expectedCreativeCountRef.current} creatives completed`);
+        const totalProcessed = completedCreativeIds.size + skippedCreativeIds.size;
+        console.log(`[Monitor All] Progress: ${completedCreativeIds.size} completed, ${skippedCreativeIds.size} skipped, total ${totalProcessed}/${expectedCreativeCountRef.current}`);
 
-        // 全クリエイティブの監視が完了したかチェック
-        if (completedCreativeIds.size >= expectedCreativeCountRef.current) {
+        // 全クリエイティブの監視が完了したかチェック（スキップされたものも含める）
+        if (totalProcessed >= expectedCreativeCountRef.current) {
           console.log(`[Monitor All] ✅ All monitoring completed!`);
           clearInterval(checkInterval);
           setIsMonitoringAll(false);
@@ -441,9 +462,13 @@ export default function Creatives() {
           const okCount = results.filter((r) => r.status === "ok").length;
           const changedCount = results.filter((r) => r.status === "changed").length;
           const errorCount = results.filter((r) => r.status === "error").length;
+          const skippedCount = skippedCreativeIds.size;
 
           // サマリー通知
-          const summaryMessage = `全監視実行が完了しました。\n正常: ${okCount}件、変更検出: ${changedCount}件、エラー: ${errorCount}件`;
+          let summaryMessage = `全監視実行が完了しました。\n正常: ${okCount}件、変更検出: ${changedCount}件、エラー: ${errorCount}件`;
+          if (skippedCount > 0) {
+            summaryMessage += `、スキップ: ${skippedCount}件（1時間以内に監視実行済み）`;
+          }
 
           if (errorCount > 0 || changedCount > 0) {
             toast.warning(summaryMessage, { duration: 5000 });
@@ -469,7 +494,7 @@ export default function Creatives() {
     return () => {
       clearInterval(checkInterval);
     };
-  }, [isMonitoringAll, creatives, utils]);
+  }, [isMonitoringAll, creatives, utils, user?.plan, creativeStatusMap]);
 
   // ステータスマップ（最新ステータス & 最終変更日）
   const creativeStatusMap = useMemo(() => {
@@ -518,6 +543,44 @@ export default function Creatives() {
     const now = new Date();
     const diffTime = now.getTime() - baseDate.getTime();
     return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  };
+  
+  // 1時間以内に監視実行されたクリエイティブを判定する関数
+  const isCreativeRecentlyMonitored = useMemo(() => {
+    const map = new Map<number, boolean>();
+    if (!creatives || !recentCreativeHistory || user?.plan === "admin") {
+      // 管理者プランは制限なし
+      return map;
+    }
+    
+    const oneHourAgo = Date.now() - 60 * 60 * 1000;
+    
+    creatives.forEach((creative) => {
+      const status = creativeStatusMap.get(creative.id);
+      if (status?.createdAt) {
+        const lastMonitoredAt = new Date(status.createdAt).getTime();
+        if (lastMonitoredAt > oneHourAgo) {
+          map.set(creative.id, true);
+        }
+      }
+    });
+    
+    return map;
+  }, [creatives, recentCreativeHistory, creativeStatusMap, user?.plan]);
+  
+  // 1時間以内に監視実行されたクリエイティブの制限メッセージを取得
+  const getCreativeRestrictionMessage = (creativeId: number): string | null => {
+    if (user?.plan === "admin") return null; // 管理者プランは制限なし
+    if (!isCreativeRecentlyMonitored.has(creativeId)) return null;
+    
+    const status = creativeStatusMap.get(creativeId);
+    if (!status?.createdAt) return null;
+    
+    const lastMonitoredAt = new Date(status.createdAt).getTime();
+    const now = Date.now();
+    const minutesRemaining = Math.ceil((lastMonitoredAt + 60 * 60 * 1000 - now) / (1000 * 60));
+    
+    return `同一対象への手動監視は1時間に1回までです。あと${minutesRemaining}分お待ちください。`;
   };
 
   const handleSort = (
@@ -1319,15 +1382,39 @@ export default function Creatives() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleMonitor(creative.id)}
-                          disabled={monitoringCreativeIds.has(creative.id) || monitorAllMutation.isPending}
-                          title={monitoringCreativeIds.has(creative.id) || monitorAllMutation.isPending ? "監視実行中..." : "監視を実行"}
-                        >
-                          <RefreshCw className={`w-4 h-4 ${monitoringCreativeIds.has(creative.id) || monitorAllMutation.isPending ? 'animate-spin' : ''}`} />
-                        </Button>
+                        {(() => {
+                          const isDisabled = monitoringCreativeIds.has(creative.id) || monitorAllMutation.isPending || isCreativeRecentlyMonitored.has(creative.id);
+                          const restrictionMessage = getCreativeRestrictionMessage(creative.id);
+                          const button = (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleMonitor(creative.id)}
+                              disabled={isDisabled}
+                              title={
+                                monitoringCreativeIds.has(creative.id) || monitorAllMutation.isPending
+                                  ? "監視実行中..."
+                                  : restrictionMessage || "監視を実行"
+                              }
+                            >
+                              <RefreshCw className={`w-4 h-4 ${monitoringCreativeIds.has(creative.id) || monitorAllMutation.isPending ? 'animate-spin' : ''}`} />
+                            </Button>
+                          );
+                          
+                          if (restrictionMessage) {
+                            return (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  {button}
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>{restrictionMessage}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            );
+                          }
+                          return button;
+                        })()}
                         <Button
                           variant="ghost"
                           size="sm"
