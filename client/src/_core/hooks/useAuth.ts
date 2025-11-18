@@ -38,10 +38,8 @@ export function useAuth(options?: UseAuthOptions) {
     } finally {
       utils.auth.me.setData(undefined, null);
       await utils.auth.me.invalidate();
-      // Redirect to landing page after logout
-      if (typeof window !== "undefined") {
-        window.location.href = "/";
-      }
+      // Note: Redirect to landing page is handled by ProtectedRoutes component
+      // when user state becomes null, so we don't need to redirect here
     }
   }, [logoutMutation, utils]);
 

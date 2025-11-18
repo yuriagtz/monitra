@@ -62,12 +62,12 @@ export default function Register() {
         // 認証状態を再取得してからリダイレクト
         const result = await utils.auth.me.refetch();
         if (result.data) {
-          // 認証状態が確認できたらリダイレクト
-          window.location.href = "/";
+          // 認証状態が確認できたらクライアントサイドルーティングで遷移（再読み込みなし）
+          setLocation("/");
         } else {
           // 認証状態が確認できない場合は少し待ってからリダイレクト
           setTimeout(() => {
-            window.location.href = "/";
+            setLocation("/");
           }, 500);
         }
       } catch (err: any) {

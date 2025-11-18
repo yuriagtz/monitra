@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
+import { Route, Switch, useLocation } from "wouter";
 import { useEffect } from "react";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -25,11 +25,10 @@ import { Loader2 } from "lucide-react";
 
 // ログイン済みユーザーが /login にアクセスした場合に / にリダイレクトするコンポーネント
 function LoginRedirect() {
+  const [, setLocation] = useLocation();
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      window.location.replace("/");
-    }
-  }, []);
+    setLocation("/");
+  }, [setLocation]);
   return (
     <div className="min-h-screen flex items-center justify-center">
       <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
@@ -39,11 +38,10 @@ function LoginRedirect() {
 
 // 認証済みユーザーが /dashboard にアクセスした場合に / にリダイレクトするコンポーネント
 function DashboardRedirect() {
+  const [, setLocation] = useLocation();
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      window.location.replace("/");
-    }
-  }, []);
+    setLocation("/");
+  }, [setLocation]);
   return (
     <div className="min-h-screen flex items-center justify-center">
       <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
