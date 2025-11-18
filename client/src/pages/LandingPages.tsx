@@ -1064,7 +1064,11 @@ export default function LandingPages() {
                         </a>
                       </TableCell>
                       <TableCell className="text-center">
-                        {status ? (
+                        {isRecentHistoryLoading ? (
+                          <span className="text-sm text-muted-foreground">
+                            読み込み中...
+                          </span>
+                        ) : status ? (
                           <div className="flex flex-col items-center gap-1">
                             <Badge
                               variant={
