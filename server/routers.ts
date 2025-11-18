@@ -28,7 +28,10 @@ export const appRouter = router({
         }
 
         const database = await getDb();
-        if (!database) throw new Error('Database not available');
+        if (!database) {
+          console.error("[Auth] Database connection failed during login");
+          throw new Error('データベースに接続できませんでした。しばらく時間をおいて再度お試しください。');
+        }
 
         // Check if user already exists in our database
         // Note: We'll also rely on Supabase Auth to catch duplicate emails
@@ -173,7 +176,10 @@ export const appRouter = router({
         }
 
         const database = await getDb();
-        if (!database) throw new Error('Database not available');
+        if (!database) {
+          console.error("[Auth] Database connection failed during login");
+          throw new Error('データベースに接続できませんでした。しばらく時間をおいて再度お試しください。');
+        }
 
         try {
           // Login with Supabase Auth
@@ -234,7 +240,10 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
-        if (!db) throw new Error('Database not available');
+        if (!db) {
+          console.error("[Auth] Database connection failed during profile update");
+          throw new Error('データベースに接続できませんでした。しばらく時間をおいて再度お試しください。');
+        }
 
         const updates: any = {};
         if (input.name !== undefined) updates.name = input.name;
@@ -256,7 +265,10 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
-        if (!db) throw new Error('Database not available');
+        if (!db) {
+          console.error("[Auth] Database connection failed during password change");
+          throw new Error('データベースに接続できませんでした。しばらく時間をおいて再度お試しください。');
+        }
 
         if (!ctx.supabase) {
           throw new Error('認証システムが設定されていません。Supabaseの環境変数を確認してください。');
