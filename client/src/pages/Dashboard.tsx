@@ -16,16 +16,10 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Progress } from "@/components/ui/progress";
+import { PLAN_CONFIG } from "@/_core/plan";
 
 export default function Dashboard() {
   const { user } = useAuth();
-
-  const PLAN_CONFIG = {
-    free: { name: "フリープラン", maxLpCount: 3, maxCreativeCount: 10, minIntervalDays: 3 },
-    light: { name: "ライトプラン", maxLpCount: 15, maxCreativeCount: 50, minIntervalDays: 3 },
-    pro: { name: "プロプラン", maxLpCount: null, maxCreativeCount: null, minIntervalDays: 1 },
-    admin: { name: "管理者プラン", maxLpCount: null, maxCreativeCount: null, minIntervalDays: 1 },
-  } as const;
 
   const userPlanKey = (user?.plan as "free" | "light" | "pro" | "admin") || "free";
   const planInfo = PLAN_CONFIG[userPlanKey];

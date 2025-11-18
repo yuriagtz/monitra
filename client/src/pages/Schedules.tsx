@@ -16,6 +16,7 @@ import { trpc } from "@/lib/trpc";
 import { Clock, Loader2, Play, Square, Edit, Search, RotateCcw } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
+import { PLAN_CONFIG, getMinIntervalDays } from "@/_core/plan";
 
 export default function Schedules() {
   const { data: user } = trpc.auth.me.useQuery();
@@ -72,7 +73,7 @@ export default function Schedules() {
   // プランに応じた最小監視間隔
   const minIntervalDays = useMemo(() => {
     const plan = (user?.plan as "free" | "light" | "pro" | "admin") || "free";
-    return plan === "pro" || plan === "admin" ? 1 : 3;
+    return getMinIntervalDays(plan);
   }, [user?.plan]);
 
   // 除外LPの初期化
@@ -89,13 +90,7 @@ export default function Schedules() {
 
   const planName = useMemo(() => {
     const plan = (user?.plan as "free" | "light" | "pro" | "admin") || "free";
-    const planNames = {
-      free: "フリープラン",
-      light: "ライトプラン",
-      pro: "プロプラン",
-      admin: "管理者プラン",
-    };
-    return planNames[plan];
+    return PLAN_CONFIG[plan].name;
   }, [user?.plan]);
 
   const handleSaveSchedule = async () => {
@@ -210,8 +205,8 @@ export default function Schedules() {
       // プランに応じて自動調整された場合（間隔が増加した場合）に通知
       if (previousIntervalDays > 0 && currentSchedule.intervalDays > previousIntervalDays && !hasShownAutoAdjustmentToast) {
         const plan = (user?.plan as "free" | "light" | "pro" | "admin") || "free";
-        const minIntervalDays = plan === "pro" || plan === "admin" ? 1 : 3;
-        if (currentSchedule.intervalDays === minIntervalDays) {
+        const planMinIntervalDays = getMinIntervalDays(plan);
+        if (currentSchedule.intervalDays === planMinIntervalDays) {
           toast.info(`監視間隔を${currentSchedule.intervalDays}日に自動調整しました（プランに応じた最小間隔）`);
           setHasShownAutoAdjustmentToast(true);
         }
@@ -333,8 +328,8 @@ export default function Schedules() {
       
       if (previousIntervalDays > 0 && currentCreativeSchedule.intervalDays > previousIntervalDays && !hasShownCreativeAutoAdjustmentToast) {
         const plan = (user?.plan as "free" | "light" | "pro" | "admin") || "free";
-        const minIntervalDays = plan === "pro" || plan === "admin" ? 1 : 3;
-        if (currentCreativeSchedule.intervalDays === minIntervalDays) {
+        const planMinIntervalDays = getMinIntervalDays(plan);
+        if (currentCreativeSchedule.intervalDays === planMinIntervalDays) {
           toast.info(`監視間隔を${currentCreativeSchedule.intervalDays}日に自動調整しました（プランに応じた最小間隔）`);
           setHasShownCreativeAutoAdjustmentToast(true);
         }

@@ -52,6 +52,7 @@ import { CreativeTagSelector } from "@/components/CreativeTagSelector";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { PLAN_CONFIG } from "@/_core/plan";
 
 type CreativeFormState = {
   title: string;
@@ -98,14 +99,6 @@ export default function Creatives() {
       refetchOnWindowFocus: false,
     }
   );
-
-  // プラン設定
-  const PLAN_CONFIG = {
-    free: { name: "フリープラン", maxCreativeCount: 10 },
-    light: { name: "ライトプラン", maxCreativeCount: 50 },
-    pro: { name: "プロプラン", maxCreativeCount: null },
-    admin: { name: "管理者プラン", maxCreativeCount: null },
-  } as const;
 
   const userPlan = (user?.plan as "free" | "light" | "pro" | "admin") || "free";
   const maxCreativeCount = PLAN_CONFIG[userPlan].maxCreativeCount;

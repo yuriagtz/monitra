@@ -17,6 +17,7 @@ import { LPTagSelector } from "@/components/LPTagSelector";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { PLAN_CONFIG } from "@/_core/plan";
 
 export default function LandingPages() {
   const [, setLocation] = useLocation();
@@ -58,14 +59,6 @@ export default function LandingPages() {
     refetchInterval: 60000, // 60秒ごとに自動更新
     refetchOnWindowFocus: true,
   });
-  
-  // プラン設定
-  const PLAN_CONFIG = {
-    free: { name: "フリープラン", maxLpCount: 3 },
-    light: { name: "ライトプラン", maxLpCount: 15 },
-    pro: { name: "プロプラン", maxLpCount: null },
-    admin: { name: "管理者プラン", maxLpCount: null },
-  } as const;
   
   const userPlan = (user?.plan as "free" | "light" | "pro" | "admin") || "free";
   const maxLpCount = PLAN_CONFIG[userPlan].maxLpCount;
