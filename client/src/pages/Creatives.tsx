@@ -212,6 +212,51 @@ export default function Creatives() {
     return statusMap;
   }, [recentCreativeHistory, creatives]);
 
+  const getDaysSinceLastChange = (createdAt: string, lastChangedAt?: string) => {
+    const baseDate = lastChangedAt ? new Date(lastChangedAt) : new Date(createdAt);
+    const now = new Date();
+    const diffTime = now.getTime() - baseDate.getTime();
+    return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  };
+  
+  // 1時間以内に監視実行されたクリエイティブを判定する関数
+  const isCreativeRecentlyMonitored = useMemo(() => {
+    const map = new Map<number, boolean>();
+    if (!creatives || !recentCreativeHistory || user?.plan === "admin") {
+      // 管理者プランは制限なし
+      return map;
+    }
+    
+    const oneHourAgo = Date.now() - 60 * 60 * 1000;
+    
+    creatives.forEach((creative) => {
+      const status = creativeStatusMap.get(creative.id);
+      if (status?.createdAt) {
+        const lastMonitoredAt = new Date(status.createdAt).getTime();
+        if (lastMonitoredAt > oneHourAgo) {
+          map.set(creative.id, true);
+        }
+      }
+    });
+    
+    return map;
+  }, [creatives, recentCreativeHistory, creativeStatusMap, user?.plan]);
+  
+  // 1時間以内に監視実行されたクリエイティブの制限メッセージを取得
+  const getCreativeRestrictionMessage = (creativeId: number): string | null => {
+    if (user?.plan === "admin") return null; // 管理者プランは制限なし
+    if (!isCreativeRecentlyMonitored.has(creativeId)) return null;
+    
+    const status = creativeStatusMap.get(creativeId);
+    if (!status?.createdAt) return null;
+    
+    const lastMonitoredAt = new Date(status.createdAt).getTime();
+    const now = Date.now();
+    const minutesRemaining = Math.ceil((lastMonitoredAt + 60 * 60 * 1000 - now) / (1000 * 60));
+    
+    return `同一対象への手動監視は1時間に1回までです。あと${minutesRemaining}分お待ちください。`;
+  };
+
   const createMutation = trpc.creatives.create.useMutation({
     onSuccess: async (data) => {
       // 新しく作成されたクリエイティブを取得
@@ -537,51 +582,6 @@ export default function Creatives() {
       clearInterval(checkInterval);
     };
   }, [isMonitoringAll, creatives, utils, user?.plan, creativeStatusMap, isCreativeRecentlyMonitored]);
-
-  const getDaysSinceLastChange = (createdAt: string, lastChangedAt?: string) => {
-    const baseDate = lastChangedAt ? new Date(lastChangedAt) : new Date(createdAt);
-    const now = new Date();
-    const diffTime = now.getTime() - baseDate.getTime();
-    return Math.floor(diffTime / (1000 * 60 * 60 * 24));
-  };
-  
-  // 1時間以内に監視実行されたクリエイティブを判定する関数
-  const isCreativeRecentlyMonitored = useMemo(() => {
-    const map = new Map<number, boolean>();
-    if (!creatives || !recentCreativeHistory || user?.plan === "admin") {
-      // 管理者プランは制限なし
-      return map;
-    }
-    
-    const oneHourAgo = Date.now() - 60 * 60 * 1000;
-    
-    creatives.forEach((creative) => {
-      const status = creativeStatusMap.get(creative.id);
-      if (status?.createdAt) {
-        const lastMonitoredAt = new Date(status.createdAt).getTime();
-        if (lastMonitoredAt > oneHourAgo) {
-          map.set(creative.id, true);
-        }
-      }
-    });
-    
-    return map;
-  }, [creatives, recentCreativeHistory, creativeStatusMap, user?.plan]);
-  
-  // 1時間以内に監視実行されたクリエイティブの制限メッセージを取得
-  const getCreativeRestrictionMessage = (creativeId: number): string | null => {
-    if (user?.plan === "admin") return null; // 管理者プランは制限なし
-    if (!isCreativeRecentlyMonitored.has(creativeId)) return null;
-    
-    const status = creativeStatusMap.get(creativeId);
-    if (!status?.createdAt) return null;
-    
-    const lastMonitoredAt = new Date(status.createdAt).getTime();
-    const now = Date.now();
-    const minutesRemaining = Math.ceil((lastMonitoredAt + 60 * 60 * 1000 - now) / (1000 * 60));
-    
-    return `同一対象への手動監視は1時間に1回までです。あと${minutesRemaining}分お待ちください。`;
-  };
 
   const handleSort = (
     key: "title" | "url" | "status" | "createdAt" | "lastChangedAt" | "daysSince"
