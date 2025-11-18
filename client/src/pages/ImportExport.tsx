@@ -1,180 +1,125 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
-import { Download, FileDown, FileUp, Loader2, Upload } from "lucide-react";
-import { useRef, useState } from "react";
+import { Download, FileDown } from "lucide-react";
 import { toast } from "sonner";
 
 export default function ImportExport() {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [importing, setImporting] = useState(false);
-  
-  const { data: lps } = trpc.lp.list.useQuery();
+  const utils = trpc.useUtils();
+  const { data: landingPages } = trpc.landingPages.list.useQuery();
+  const { data: creatives } = trpc.creatives.list.useQuery();
   const { data: histories } = trpc.monitoring.recent.useQuery({ limit: 1000 });
-  const importLps = trpc.importExport.importLps.useMutation();
+  const { data: creativeHistories } = trpc.monitoring.creativeRecent.useQuery({ limit: 1000 });
+  const { data: exportHistory = [], isLoading: isHistoryLoading } = trpc.importExport.getHistory.useQuery(
+    undefined,
+    { staleTime: 1000 * 60 }
+  );
+  const recordExport = trpc.importExport.recordExport.useMutation({
+    onSuccess: () => utils.importExport.getHistory.invalidate(),
+  });
   
-  const handleImportClick = () => {
-    fileInputRef.current?.click();
-  };
-  
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    setImporting(true);
-    try {
-      const text = await file.text();
-      const lines = text.split('\n').filter(line => line.trim());
-      
-      // Skip header if exists
-      const dataLines = lines[0].toLowerCase().includes('title') ? lines.slice(1) : lines;
-      
-      const lpsToImport = dataLines.map(line => {
-        const [title, url, description] = line.split(',').map(s => s.trim().replace(/^"|"$/g, ''));
-        return { title, url, description: description || '' };
-      }).filter(lp => lp.title && lp.url);
-      
-      await importLps.mutateAsync({ lps: lpsToImport });
-      toast.success(`${lpsToImport.length}件のLPをインポートしました`);
-      
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    } catch (error) {
-      toast.error('インポートに失敗しました');
-      console.error(error);
-    } finally {
-      setImporting(false);
-    }
-  };
-  
-  const handleExportLps = () => {
-    if (!lps || lps.length === 0) {
+  const handleExportLps = async () => {
+    if (!landingPages || landingPages.length === 0) {
       toast.error('エクスポートするLPがありません');
       return;
     }
     
     const csv = [
       'Title,URL,Description',
-      ...lps.map(lp => `"${lp.title}","${lp.url}","${lp.description || ''}"`)
+      ...landingPages.map(landingPage => `"${landingPage.title}","${landingPage.url}","${landingPage.description || ''}"`)
     ].join('\n');
     
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `lps_${new Date().toISOString().split('T')[0]}.csv`;
+    const filename = `lps_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = filename;
     link.click();
     
+    await recordExport.mutateAsync({ type: "LPリスト (CSV)", filename });
     toast.success('LPリストをエクスポートしました');
   };
   
-  const handleExportHistories = () => {
+  const handleExportHistories = async () => {
     if (!histories || histories.length === 0) {
       toast.error('エクスポートする履歴がありません');
       return;
     }
     
     const csv = [
-      'LP ID,Check Type,Status,Message,Diff %,Top Third %,Middle Third %,Bottom Third %,Region Analysis,Created At',
+      'LP ID,Check Type,Status,Message,Region Analysis,Created At',
       ...histories.map(h => 
-        `${h.landingPageId},"${h.checkType}","${h.status}","${h.message}",${h.diffTopThird || ''},${h.diffTopThird || ''},${h.diffMiddleThird || ''},${h.diffBottomThird || ''},"${h.regionAnalysis || ''}","${new Date(h.createdAt).toISOString()}"`
+        `${h.landingPageId},"${h.checkType}","${h.status}","${h.message || ""}","${h.regionAnalysis || ''}","${new Date(h.createdAt).toISOString()}"`
       )
     ].join('\n');
     
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `monitoring_history_${new Date().toISOString().split('T')[0]}.csv`;
+    const filename = `lp_monitoring_history_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = filename;
     link.click();
     
-    toast.success('監視履歴をエクスポートしました');
+    await recordExport.mutateAsync({ type: "LP監視履歴 (CSV)", filename });
+    toast.success('LP監視履歴をエクスポートしました');
   };
   
-  const handleExportJson = () => {
-    if (!lps || lps.length === 0) {
-      toast.error('エクスポートするデータがありません');
+  const handleExportCreatives = async () => {
+    if (!creatives || creatives.length === 0) {
+      toast.error('エクスポートするクリエイティブがありません');
       return;
     }
     
-    const data = {
-      exportedAt: new Date().toISOString(),
-      lps: lps,
-      histories: histories || [],
-    };
+    const csv = [
+      'Title,Image URL,Target URL,Description',
+      ...creatives.map(creative => 
+        `"${creative.title}","${creative.imageUrl}","${creative.targetUrl || ''}","${creative.description || ''}"`
+      )
+    ].join('\n');
     
-    const json = JSON.stringify(data, null, 2);
-    const blob = new Blob([json], { type: 'application/json;charset=utf-8;' });
+    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `lp_monitor_backup_${new Date().toISOString().split('T')[0]}.json`;
+    const filename = `creatives_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = filename;
     link.click();
     
-    toast.success('データをJSONでエクスポートしました');
+    await recordExport.mutateAsync({ type: "クリエイティブリスト (CSV)", filename });
+    toast.success('クリエイティブリストをエクスポートしました');
+  };
+  
+  const handleExportCreativeHistories = async () => {
+    if (!creativeHistories || creativeHistories.length === 0) {
+      toast.error('エクスポートする履歴がありません');
+      return;
+    }
+    
+    const csv = [
+      'Creative ID,Check Type,Status,Message,Region Analysis,Created At',
+      ...creativeHistories.map(h => 
+        `${h.creativeId},"${h.checkType}","${h.status}","${h.message || ""}","${h.regionAnalysis || ''}","${new Date(h.createdAt).toISOString()}"`
+      )
+    ].join('\n');
+    
+    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    const filename = `creative_monitoring_history_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = filename;
+    link.click();
+    
+    await recordExport.mutateAsync({ type: "クリエイティブ監視履歴 (CSV)", filename });
+    toast.success('クリエイティブ監視履歴をエクスポートしました');
   };
   
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">インポート/エクスポート</h1>
+        <h1 className="text-3xl font-bold">エクスポート</h1>
         <p className="text-muted-foreground mt-2">
-          LPデータと監視履歴のインポート・エクスポート
+          LP、クリエイティブ、監視履歴のデータをエクスポートしてバックアップを作成します
         </p>
       </div>
-
-      {/* Import */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <Upload className="w-5 h-5" />
-            <div>
-              <CardTitle>インポート</CardTitle>
-              <CardDescription>CSV形式でLPを一括登録</CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>CSVファイル</Label>
-            <div className="flex gap-2">
-              <Input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv"
-                onChange={handleFileChange}
-                className="hidden"
-              />
-              <Button onClick={handleImportClick} disabled={importing}>
-                {importing ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    インポート中...
-                  </>
-                ) : (
-                  <>
-                    <FileUp className="w-4 h-4 mr-2" />
-                    CSVファイルを選択
-                  </>
-                )}
-              </Button>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              CSV形式: Title,URL,Description
-            </p>
-          </div>
-
-          <div className="bg-muted p-4 rounded-lg">
-            <p className="text-sm font-medium mb-2">CSVフォーマット例:</p>
-            <pre className="text-xs bg-background p-2 rounded">
-{`Title,URL,Description
-"商品A LP","https://example.com/lp1","商品Aのランディングページ"
-"キャンペーン LP","https://example.com/campaign","期間限定キャンペーン"`}
-            </pre>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Export */}
       <Card>
@@ -187,45 +132,100 @@ export default function ImportExport() {
             </div>
           </div>
         </CardHeader>
+        <CardContent className="space-y-6">
+          {/* LPセクション */}
+          <div className="space-y-3">
+            <h3 className="text-lg font-semibold">LP</h3>
+            <div className="space-y-3 pl-4">
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div>
+                  <p className="font-medium">LPリスト (CSV)</p>
+                  <p className="text-sm text-muted-foreground">
+                    登録されている全LPをCSV形式でエクスポート
+                  </p>
+                </div>
+                <Button onClick={handleExportLps}>
+                  <FileDown className="w-4 h-4 mr-2" />
+                  エクスポート
+                </Button>
+              </div>
+
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div>
+                  <p className="font-medium">LP監視履歴 (CSV)</p>
+                  <p className="text-sm text-muted-foreground">
+                    全てのLP監視履歴をCSV形式でエクスポート
+                  </p>
+                </div>
+                <Button onClick={handleExportHistories}>
+                  <FileDown className="w-4 h-4 mr-2" />
+                  エクスポート
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* クリエイティブセクション */}
+          <div className="space-y-3">
+            <h3 className="text-lg font-semibold">クリエイティブ</h3>
+            <div className="space-y-3 pl-4">
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div>
+                  <p className="font-medium">クリエイティブリスト (CSV)</p>
+                  <p className="text-sm text-muted-foreground">
+                    登録されている全クリエイティブをCSV形式でエクスポート
+                  </p>
+                </div>
+                <Button onClick={handleExportCreatives}>
+                  <FileDown className="w-4 h-4 mr-2" />
+                  エクスポート
+                </Button>
+              </div>
+
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div>
+                  <p className="font-medium">クリエイティブ監視履歴 (CSV)</p>
+                  <p className="text-sm text-muted-foreground">
+                    全てのクリエイティブ監視履歴をCSV形式でエクスポート
+                  </p>
+                </div>
+                <Button onClick={handleExportCreativeHistories}>
+                  <FileDown className="w-4 h-4 mr-2" />
+                  エクスポート
+                </Button>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Export History */}
+      <Card>
+        <CardHeader>
+          <CardTitle>エクスポート履歴</CardTitle>
+          <CardDescription>直近20件のエクスポート記録</CardDescription>
+        </CardHeader>
         <CardContent className="space-y-3">
-          <div className="flex items-center justify-between p-4 border rounded-lg">
-            <div>
-              <p className="font-medium">LPリスト (CSV)</p>
-              <p className="text-sm text-muted-foreground">
-                登録されている全LPをCSV形式でエクスポート
-              </p>
-            </div>
-            <Button onClick={handleExportLps} variant="outline">
-              <FileDown className="w-4 h-4 mr-2" />
-              エクスポート
-            </Button>
-          </div>
-
-          <div className="flex items-center justify-between p-4 border rounded-lg">
-            <div>
-              <p className="font-medium">監視履歴 (CSV)</p>
-              <p className="text-sm text-muted-foreground">
-                全ての監視履歴をCSV形式でエクスポート
-              </p>
-            </div>
-            <Button onClick={handleExportHistories} variant="outline">
-              <FileDown className="w-4 h-4 mr-2" />
-              エクスポート
-            </Button>
-          </div>
-
-          <div className="flex items-center justify-between p-4 border rounded-lg">
-            <div>
-              <p className="font-medium">完全バックアップ (JSON)</p>
-              <p className="text-sm text-muted-foreground">
-                LP・履歴を含む全データをJSON形式でエクスポート
-              </p>
-            </div>
-            <Button onClick={handleExportJson} variant="outline">
-              <FileDown className="w-4 h-4 mr-2" />
-              エクスポート
-            </Button>
-          </div>
+          {isHistoryLoading ? (
+            <p className="text-sm text-muted-foreground">読み込み中...</p>
+          ) : exportHistory.length > 0 ? (
+            exportHistory.map(entry => (
+              <div
+                key={entry.id}
+                className="flex flex-col gap-1 rounded-lg border p-3 md:flex-row md:items-center md:justify-between bg-amber-50"
+              >
+                <div>
+                  <p className="font-medium">{entry.type}</p>
+                  <p className="text-xs text-muted-foreground break-all">{entry.filename}</p>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {new Date(entry.createdAt).toLocaleString()}
+                </p>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-muted-foreground">エクスポート履歴がまだありません。</p>
+          )}
         </CardContent>
       </Card>
 
@@ -238,11 +238,19 @@ export default function ImportExport() {
           <div className="grid grid-cols-2 gap-4">
             <div className="p-4 bg-muted rounded-lg">
               <p className="text-sm text-muted-foreground">登録LP数</p>
-              <p className="text-2xl font-bold">{lps?.length || 0}</p>
+              <p className="text-2xl font-bold">{landingPages?.length || 0}</p>
             </div>
             <div className="p-4 bg-muted rounded-lg">
-              <p className="text-sm text-muted-foreground">監視履歴数</p>
+              <p className="text-sm text-muted-foreground">登録クリエイティブ数</p>
+              <p className="text-2xl font-bold">{creatives?.length || 0}</p>
+            </div>
+            <div className="p-4 bg-muted rounded-lg">
+              <p className="text-sm text-muted-foreground">LP監視履歴数</p>
               <p className="text-2xl font-bold">{histories?.length || 0}</p>
+            </div>
+            <div className="p-4 bg-muted rounded-lg">
+              <p className="text-sm text-muted-foreground">クリエイティブ監視履歴数</p>
+              <p className="text-2xl font-bold">{creativeHistories?.length || 0}</p>
             </div>
           </div>
         </CardContent>

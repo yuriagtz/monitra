@@ -8,6 +8,8 @@ import DashboardLayout from "./components/DashboardLayout";
 import Dashboard from "./pages/Dashboard";
 import LandingPages from "./pages/LandingPages";
 import MonitoringHistory from "./pages/MonitoringHistory";
+import CreativeHistory from "./pages/CreativeHistory";
+import Creatives from "./pages/Creatives";
 import Settings from "./pages/Settings";
 import Notifications from "./pages/Notifications";
 import Schedules from "./pages/Schedules";
@@ -51,12 +53,16 @@ function ProtectedRoutes() {
       <Switch>
         <Route path="/" component={Dashboard} />
         <Route path="/dashboard" component={Dashboard} />
-        <Route path="/lps" component={LandingPages} />
+        {/* ログイン済みで /login にアクセスした場合もダッシュボードを表示 */}
+        <Route path="/login" component={Dashboard} />
+        <Route path="/landing-pages" component={LandingPages} />
         <Route path="/history/:id" component={MonitoringHistory} />
+        <Route path="/creatives" component={Creatives} />
+        <Route path="/history/creative/:id" component={CreativeHistory} />
         <Route path="/analytics" component={Analytics} />
         <Route path="/notifications" component={Notifications} />
         <Route path="/schedules" component={Schedules} />
-        <Route path="/import-export" component={ImportExport} />
+        <Route path="/export" component={ImportExport} />
         <Route path="/settings" component={Settings} />
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />

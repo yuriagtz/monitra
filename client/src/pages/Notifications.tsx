@@ -9,30 +9,35 @@ import { Loader2, Mail, MessageSquare, Send } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+const initialFormData = {
+  emailEnabled: false,
+  emailAddress: "",
+  slackEnabled: false,
+  slackWebhookUrl: "",
+  discordEnabled: false,
+  discordWebhookUrl: "",
+  chatworkEnabled: false,
+  chatworkApiToken: "",
+  chatworkRoomId: "",
+  notifyOnChange: true,
+  notifyOnError: true,
+  notifyOnBrokenLink: true,
+  ignoreFirstViewOnly: false,
+};
+
+type FormData = typeof initialFormData;
+
 export default function Notifications() {
   const { data: settings, isLoading, refetch } = trpc.notifications.getSettings.useQuery();
   const updateSettings = trpc.notifications.updateSettings.useMutation();
   const testNotification = trpc.notifications.testNotification.useMutation();
 
-  const [formData, setFormData] = useState({
-    emailEnabled: false,
-    emailAddress: "",
-    slackEnabled: false,
-    slackWebhookUrl: "",
-    discordEnabled: false,
-    discordWebhookUrl: "",
-    chatworkEnabled: false,
-    chatworkApiToken: "",
-    chatworkRoomId: "",
-    notifyOnChange: true,
-    notifyOnError: true,
-    notifyOnBrokenLink: true,
-    ignoreFirstViewOnly: false,
-  });
+  const [formData, setFormData] = useState<FormData>(initialFormData);
+  const [savedData, setSavedData] = useState<FormData>(initialFormData);
 
   useEffect(() => {
     if (settings) {
-      setFormData({
+      const next = {
         emailEnabled: !!settings.emailEnabled,
         emailAddress: settings.emailAddress || "",
         slackEnabled: !!settings.slackEnabled,
@@ -46,14 +51,19 @@ export default function Notifications() {
         notifyOnError: !!settings.notifyOnError,
         notifyOnBrokenLink: !!settings.notifyOnBrokenLink,
         ignoreFirstViewOnly: !!settings.ignoreFirstViewOnly,
-      });
+      };
+      setFormData(next);
+      setSavedData(next);
     }
   }, [settings]);
 
   const handleSave = async () => {
     try {
-      await updateSettings.mutateAsync(formData);
+      const payload = formData;
+      await updateSettings.mutateAsync(payload);
       toast.success("通知設定を保存しました");
+      // 全体を保存したので、savedData も現在のフォーム状態で更新
+      setSavedData(payload);
       refetch();
     } catch (error) {
       toast.error("保存に失敗しました");
@@ -73,6 +83,30 @@ export default function Notifications() {
     }
   };
 
+  // 各カード単位の「未保存変更あり」判定
+  const hasEmailChanges =
+    formData.emailEnabled !== savedData.emailEnabled ||
+    formData.emailAddress !== savedData.emailAddress;
+
+  const hasSlackChanges =
+    formData.slackEnabled !== savedData.slackEnabled ||
+    formData.slackWebhookUrl !== savedData.slackWebhookUrl;
+
+  const hasDiscordChanges =
+    formData.discordEnabled !== savedData.discordEnabled ||
+    formData.discordWebhookUrl !== savedData.discordWebhookUrl;
+
+  const hasChatworkChanges =
+    formData.chatworkEnabled !== savedData.chatworkEnabled ||
+    formData.chatworkApiToken !== savedData.chatworkApiToken ||
+    formData.chatworkRoomId !== savedData.chatworkRoomId;
+
+  const hasConditionChanges =
+    formData.notifyOnChange !== savedData.notifyOnChange ||
+    formData.notifyOnError !== savedData.notifyOnError ||
+    formData.notifyOnBrokenLink !== savedData.notifyOnBrokenLink ||
+    formData.ignoreFirstViewOnly !== savedData.ignoreFirstViewOnly;
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -86,7 +120,7 @@ export default function Notifications() {
       <div>
         <h1 className="text-3xl font-bold">通知設定</h1>
         <p className="text-muted-foreground mt-2">
-          LP変更検出時の通知方法を設定します
+          LPとクリエイティブの通知チャネルと通知条件を設定します
         </p>
       </div>
 
@@ -103,9 +137,18 @@ export default function Notifications() {
             </div>
             <Switch
               checked={formData.emailEnabled}
-              onCheckedChange={(checked) =>
-                setFormData({ ...formData, emailEnabled: checked })
-              }
+              onCheckedChange={async (checked) => {
+                setFormData({ ...formData, emailEnabled: checked });
+                try {
+                  await updateSettings.mutateAsync({ emailEnabled: checked });
+                  const next = { ...savedData, emailEnabled: checked };
+                  setSavedData(next);
+                  toast.success(`メール通知を${checked ? "有効" : "無効"}にしました`);
+                  refetch();
+                } catch (error) {
+                  toast.error("メール通知の更新に失敗しました");
+                }
+              }}
             />
           </div>
         </CardHeader>
@@ -124,16 +167,36 @@ export default function Notifications() {
                 className="bg-white"
               />
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleTest('email')}
-              disabled={!formData.emailAddress || testNotification.isPending}
-              className="bg-white"
-            >
-              <Send className="w-4 h-4 mr-2" />
-              テスト送信
-            </Button>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-start sm:gap-2">
+              <Button
+                size="sm"
+                onClick={handleSave}
+                disabled={updateSettings.isPending || !hasEmailChanges}
+              >
+                {updateSettings.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    保存中...
+                  </>
+                ) : (
+                  <>保存</>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleTest("email")}
+                disabled={
+                  !formData.emailAddress ||
+                  testNotification.isPending ||
+                  hasEmailChanges
+                }
+                className="bg-white"
+              >
+                <Send className="w-4 h-4 mr-2" />
+                テスト送信
+              </Button>
+            </div>
           </CardContent>
         )}
       </Card>
@@ -151,9 +214,18 @@ export default function Notifications() {
             </div>
             <Switch
               checked={formData.slackEnabled}
-              onCheckedChange={(checked) =>
-                setFormData({ ...formData, slackEnabled: checked })
-              }
+              onCheckedChange={async (checked) => {
+                setFormData({ ...formData, slackEnabled: checked });
+                try {
+                  await updateSettings.mutateAsync({ slackEnabled: checked });
+                  const next = { ...savedData, slackEnabled: checked };
+                  setSavedData(next);
+                  toast.success(`Slack通知を${checked ? "有効" : "無効"}にしました`);
+                  refetch();
+                } catch (error) {
+                  toast.error("Slack通知の更新に失敗しました");
+                }
+              }}
             />
           </div>
         </CardHeader>
@@ -172,16 +244,36 @@ export default function Notifications() {
                 className="bg-white"
               />
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleTest('slack')}
-              disabled={!formData.slackWebhookUrl || testNotification.isPending}
-              className="bg-white"
-            >
-              <Send className="w-4 h-4 mr-2" />
-              テスト送信
-            </Button>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-start sm:gap-2">
+              <Button
+                size="sm"
+                onClick={handleSave}
+                disabled={updateSettings.isPending || !hasSlackChanges}
+              >
+                {updateSettings.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    保存中...
+                  </>
+                ) : (
+                  <>保存</>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleTest("slack")}
+                disabled={
+                  !formData.slackWebhookUrl ||
+                  testNotification.isPending ||
+                  hasSlackChanges
+                }
+                className="bg-white"
+              >
+                <Send className="w-4 h-4 mr-2" />
+                テスト送信
+              </Button>
+            </div>
           </CardContent>
         )}
       </Card>
@@ -199,9 +291,18 @@ export default function Notifications() {
             </div>
             <Switch
               checked={formData.discordEnabled}
-              onCheckedChange={(checked) =>
-                setFormData({ ...formData, discordEnabled: checked })
-              }
+              onCheckedChange={async (checked) => {
+                setFormData({ ...formData, discordEnabled: checked });
+                try {
+                  await updateSettings.mutateAsync({ discordEnabled: checked });
+                  const next = { ...savedData, discordEnabled: checked };
+                  setSavedData(next);
+                  toast.success(`Discord通知を${checked ? "有効" : "無効"}にしました`);
+                  refetch();
+                } catch (error) {
+                  toast.error("Discord通知の更新に失敗しました");
+                }
+              }}
             />
           </div>
         </CardHeader>
@@ -220,16 +321,36 @@ export default function Notifications() {
                 className="bg-white"
               />
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleTest('discord')}
-              disabled={!formData.discordWebhookUrl || testNotification.isPending}
-              className="bg-white"
-            >
-              <Send className="w-4 h-4 mr-2" />
-              テスト送信
-            </Button>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-start sm:gap-2">
+              <Button
+                size="sm"
+                onClick={handleSave}
+                disabled={updateSettings.isPending || !hasDiscordChanges}
+              >
+                {updateSettings.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    保存中...
+                  </>
+                ) : (
+                  <>保存</>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleTest("discord")}
+                disabled={
+                  !formData.discordWebhookUrl ||
+                  testNotification.isPending ||
+                  hasDiscordChanges
+                }
+                className="bg-white"
+              >
+                <Send className="w-4 h-4 mr-2" />
+                テスト送信
+              </Button>
+            </div>
           </CardContent>
         )}
       </Card>
@@ -247,9 +368,18 @@ export default function Notifications() {
             </div>
             <Switch
               checked={formData.chatworkEnabled}
-              onCheckedChange={(checked) =>
-                setFormData({ ...formData, chatworkEnabled: checked })
-              }
+              onCheckedChange={async (checked) => {
+                setFormData({ ...formData, chatworkEnabled: checked });
+                try {
+                  await updateSettings.mutateAsync({ chatworkEnabled: checked });
+                  const next = { ...savedData, chatworkEnabled: checked };
+                  setSavedData(next);
+                  toast.success(`Chatwork通知を${checked ? "有効" : "無効"}にしました`);
+                  refetch();
+                } catch (error) {
+                  toast.error("Chatwork通知の更新に失敗しました");
+                }
+              }}
             />
           </div>
         </CardHeader>
@@ -280,16 +410,37 @@ export default function Notifications() {
                 className="bg-white"
               />
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleTest('chatwork')}
-              disabled={!formData.chatworkApiToken || !formData.chatworkRoomId || testNotification.isPending}
-              className="bg-white"
-            >
-              <Send className="w-4 h-4 mr-2" />
-              テスト送信
-            </Button>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-start sm:gap-2">
+              <Button
+                size="sm"
+                onClick={handleSave}
+                disabled={updateSettings.isPending || !hasChatworkChanges}
+              >
+                {updateSettings.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    保存中...
+                  </>
+                ) : (
+                  <>保存</>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleTest("chatwork")}
+                disabled={
+                  !formData.chatworkApiToken ||
+                  !formData.chatworkRoomId ||
+                  testNotification.isPending ||
+                  hasChatworkChanges
+                }
+                className="bg-white"
+              >
+                <Send className="w-4 h-4 mr-2" />
+                テスト送信
+              </Button>
+            </div>
           </CardContent>
         )}
       </Card>
@@ -360,17 +511,26 @@ export default function Notifications() {
               }
             />
           </div>
+          <div className="flex justify-end pt-2">
+            <Button
+              size="sm"
+              onClick={handleSave}
+              disabled={updateSettings.isPending || !hasConditionChanges}
+            >
+              {updateSettings.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  保存中...
+                </>
+              ) : (
+                <>保存</>
+              )}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
-      <div className="flex justify-end">
-        <Button onClick={handleSave} disabled={updateSettings.isPending}>
-          {updateSettings.isPending && (
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-          )}
-          設定を保存
-        </Button>
-      </div>
+      {/* 画面全体の一括保存ボタンは、カード内保存があるため削除 */}
     </div>
   );
 }

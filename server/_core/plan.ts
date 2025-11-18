@@ -2,23 +2,32 @@
  * プラン設定とバリデーション
  */
 
-export type Plan = "free" | "light" | "pro";
+export type Plan = "free" | "light" | "pro" | "admin";
 
 export const PLAN_CONFIG = {
   free: {
     name: "フリープラン",
     minIntervalDays: 3, // 最小3日に1回
     maxLpCount: 3, // 最大LP登録数
+    maxCreativeCount: 10, // 最大クリエイティブ登録数
   },
   light: {
     name: "ライトプラン",
     minIntervalDays: 3,
     maxLpCount: 15,
+    maxCreativeCount: 50,
   },
   pro: {
     name: "プロプラン",
     minIntervalDays: 1, // 最小1日に1回
     maxLpCount: null, // 無制限
+    maxCreativeCount: null, // 無制限
+  },
+  admin: {
+    name: "管理者プラン",
+    minIntervalDays: 1, // 最小1日に1回（管理者は最短間隔も使用可能）
+    maxLpCount: null, // 無制限
+    maxCreativeCount: null, // 無制限
   },
 } as const;
 

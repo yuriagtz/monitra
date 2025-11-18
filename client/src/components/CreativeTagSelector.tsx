@@ -9,62 +9,64 @@ import { trpc } from "@/lib/trpc";
 import { Check, Plus } from "lucide-react";
 import { toast } from "sonner";
 
-interface LPTagSelectorProps {
-  landingPageId: number;
+interface CreativeTagSelectorProps {
+  creativeId: number;
 }
 
-export function LPTagSelector({ landingPageId }: LPTagSelectorProps) {
+export function CreativeTagSelector({ creativeId }: CreativeTagSelectorProps) {
   const { data: allTags } = trpc.tags.list.useQuery(undefined, {
-    staleTime: 1000 * 60 * 10, // 10分間キャッシュ
+    staleTime: 1000 * 60 * 10,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
   });
-  const { data: lpTags, refetch } = trpc.tags.getForLandingPage.useQuery(
-    { landingPageId },
-    {
-      staleTime: 1000 * 60 * 5, // 5分間キャッシュ
-      refetchOnWindowFocus: false,
-      refetchOnMount: false,
-    }
-  );
 
-  const addTag = trpc.tags.addToLandingPage.useMutation({
+  const { data: creativeTags, refetch } =
+    trpc.tags.getForCreative.useQuery(
+      { creativeId },
+      {
+        staleTime: 1000 * 60 * 5,
+        refetchOnWindowFocus: false,
+        refetchOnMount: false,
+      }
+    );
+
+  const addTag = trpc.tags.addToCreative.useMutation({
     onSuccess: () => {
       toast.success("タグを追加しました");
       refetch();
     },
     onError: (error) => {
-      toast.error(`エラー: ${error.message}`);
+      toast.error(error.message || "タグの追加に失敗しました");
     },
   });
 
-  const removeTag = trpc.tags.removeFromLandingPage.useMutation({
+  const removeTag = trpc.tags.removeFromCreative.useMutation({
     onSuccess: () => {
       toast.success("タグを削除しました");
       refetch();
     },
     onError: (error) => {
-      toast.error(`エラー: ${error.message}`);
+      toast.error(error.message || "タグの削除に失敗しました");
     },
   });
 
   const handleToggleTag = (tagId: number) => {
-    const isAssigned = lpTags?.some((t) => t.id === tagId);
+    const isAssigned = creativeTags?.some((t) => t.id === tagId);
     if (isAssigned) {
-      removeTag.mutate({ landingPageId, tagId });
+      removeTag.mutate({ creativeId, tagId });
     } else {
-      addTag.mutate({ landingPageId, tagId });
+      addTag.mutate({ creativeId, tagId });
     }
   };
 
-  const lpTagsMaster = (allTags ?? []).filter((tag: any) => {
+  const creativeTagsMaster = (allTags ?? []).filter((tag: any) => {
     const type = (tag as any).targetType ?? "lp";
-    return type === "lp";
+    return type === "creative";
   });
 
   return (
-    <div className="flex items-center gap-2 flex-wrap">
-      {lpTags?.map((tag) => (
+    <div className="flex items-center gap-2 flex-wrap justify-center">
+      {creativeTags?.map((tag) => (
         <Badge
           key={tag.id}
           style={{ backgroundColor: tag.color }}
@@ -83,10 +85,12 @@ export function LPTagSelector({ landingPageId }: LPTagSelectorProps) {
         <PopoverContent className="w-64">
           <div className="space-y-2">
             <h4 className="font-semibold text-sm">タグを追加</h4>
-            {lpTagsMaster && lpTagsMaster.length > 0 ? (
-              <div className="space-y-1">
-                {lpTagsMaster.map((tag) => {
-                  const isAssigned = lpTags?.some((t) => t.id === tag.id);
+            {creativeTagsMaster && creativeTagsMaster.length > 0 ? (
+              <div className="space-y-1 max-h-64 overflow-auto">
+                {creativeTagsMaster.map((tag) => {
+                  const isAssigned = creativeTags?.some(
+                    (t) => t.id === tag.id
+                  );
                   return (
                     <button
                       key={tag.id}
@@ -116,3 +120,5 @@ export function LPTagSelector({ landingPageId }: LPTagSelectorProps) {
     </div>
   );
 }
+
+

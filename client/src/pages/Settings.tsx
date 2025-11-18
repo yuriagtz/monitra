@@ -34,16 +34,27 @@ export default function Settings() {
   });
 
   const changePassword = trpc.auth.changePassword.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success('パスワードを変更しました');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
+      // ユーザー情報を再取得して、passwordフラグを反映
+      await utils.auth.me.invalidate();
     },
     onError: (error) => {
       toast.error(`エラー: ${error.message}`);
     },
   });
+
+  // 入力値の変更有無（ダーティ状態）を判定
+  const isProfileDirty =
+    name !== (user?.name || "") ||
+    email !== (user?.email || "") ||
+    profileImage !== null;
+
+  const isPasswordDirty =
+    currentPassword !== "" || newPassword !== "" || confirmPassword !== "";
 
   const handleUpdateProfile = () => {
     updateProfile.mutate({ 
@@ -72,7 +83,9 @@ export default function Settings() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">設定</h1>
-        <p className="text-muted-foreground mt-2">システムの設定を管理します</p>
+        <p className="text-muted-foreground mt-2">
+          アカウント情報やタグなど、Monitra全体の設定を管理します
+        </p>
       </div>
 
       {/* プロフィール編集セクション */}
@@ -164,7 +177,7 @@ export default function Settings() {
           </div>
           <Button
             onClick={handleUpdateProfile}
-            disabled={updateProfile.isPending}
+            disabled={updateProfile.isPending || !isProfileDirty}
           >
             {updateProfile.isPending ? '更新中...' : 'プロフィールを更新'}
           </Button>
@@ -214,7 +227,7 @@ export default function Settings() {
           </div>
           <Button
             onClick={handleChangePassword}
-            disabled={changePassword.isPending}
+            disabled={changePassword.isPending || !isPasswordDirty}
           >
             {changePassword.isPending ? '変更中...' : 'パスワードを変更'}
           </Button>

@@ -71,6 +71,7 @@ Vercelのダッシュボードで以下の環境変数を設定してくださ�
 
 - すべてのAPIリクエストとページリクエストは `dist/index.js` にルーティングされ、Expressが処理します。
 - `includeFiles` で `dist/public/**` を指定することで、Express が参照するフロントエンド資産をサーバーレス関数に同梱しています。
+- 本番環境では `process.cwd()/dist/public` を配信ルートとして参照するため、`dist` フォルダ全体がビルド成果物に含まれている必要があります。
 - Cron Jobは毎時0分（UTC）に `/api/cron/schedule-check` を呼び出します。
 
 ## タイムゾーンの考慮

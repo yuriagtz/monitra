@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Loader2, Plus, Trash2, Eye, RefreshCw, Search, X, Pencil, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle } from "lucide-react";
 import { useLocation } from "wouter";
@@ -34,7 +35,7 @@ export default function LandingPages() {
   const expectedLpCountRef = useRef<number>(0); // 期待される監視完了数
 
   const utils = trpc.useUtils();
-  const { data: landingPages, isLoading } = trpc.lp.list.useQuery(undefined, {
+  const { data: landingPages, isLoading } = trpc.landingPages.list.useQuery(undefined, {
     // このクエリは10分間キャッシュを使用（LPリストは頻繁に変わらない）
     staleTime: 1000 * 60 * 10,
     // ウィンドウフォーカス時は再取得しない
@@ -42,15 +43,22 @@ export default function LandingPages() {
     // マウント時もキャッシュがあれば使用
     refetchOnMount: false,
   });
+  const scheduleQuery = trpc.schedules.get.useQuery();
+  const scheduleUpsert = trpc.schedules.upsert.useMutation({
+    onSuccess: () => {
+      utils.schedules.get.invalidate();
+    },
+  });
   
   // プラン設定
   const PLAN_CONFIG = {
     free: { name: "フリープラン", maxLpCount: 3 },
     light: { name: "ライトプラン", maxLpCount: 15 },
     pro: { name: "プロプラン", maxLpCount: null },
+    admin: { name: "管理者プラン", maxLpCount: null },
   } as const;
   
-  const userPlan = (user?.plan as "free" | "light" | "pro") || "free";
+  const userPlan = (user?.plan as "free" | "light" | "pro" | "admin") || "free";
   const maxLpCount = PLAN_CONFIG[userPlan].maxLpCount;
   const currentLpCount = landingPages?.length || 0;
   const isAtLimit = maxLpCount !== null && currentLpCount >= maxLpCount;
@@ -61,6 +69,44 @@ export default function LandingPages() {
     refetchOnWindowFocus: false,
     refetchOnMount: false,
   });
+
+  // 各LPに紐づくタグID（フィルタ用）
+  const { data: lpTagRelations } =
+    trpc.tags.getForUserLandingPages.useQuery(undefined, {
+      staleTime: 1000 * 60 * 5,
+      refetchOnWindowFocus: false,
+      refetchOnMount: false,
+    });
+
+  const lpTagMap = useMemo(() => {
+    const map = new Map<number, Set<number>>();
+    if (!lpTagRelations) return map;
+    for (const rel of lpTagRelations as any[]) {
+      const landingPageId = rel.landingPageId ?? rel.landing_page_id;
+      const tagId = rel.tagId ?? rel.tag_id;
+      if (!landingPageId || !tagId) continue;
+      if (!map.has(landingPageId)) {
+        map.set(landingPageId, new Set<number>());
+      }
+      map.get(landingPageId)!.add(tagId);
+    }
+    return map;
+  }, [lpTagRelations]);
+
+  // スケジュールから除外LPのセットを作成
+  const excludedLpIdsFromSchedule = useMemo(() => {
+    const schedule = scheduleQuery.data;
+    if (!schedule || !schedule.excludedLandingPageIds) {
+      return new Set<number>();
+    }
+    try {
+      const ids = JSON.parse(schedule.excludedLandingPageIds) as number[];
+      return new Set<number>(ids);
+    } catch (e) {
+      console.error("Failed to parse excludedLandingPageIds:", e);
+      return new Set<number>();
+    }
+  }, [scheduleQuery.data]);
 
   // 各LPの最新監視履歴を取得（LP数分の履歴を取得）
   // limitを十分に大きくして、すべてのLPの最新履歴を取得できるようにする
@@ -80,12 +126,12 @@ export default function LandingPages() {
     
     const statusMap = new Map<number, { status: string; checkType?: string; createdAt: string; lastChangedAt?: string }>();
     
-    landingPages.forEach((lp) => {
+    landingPages.forEach((landingPage) => {
       // 各LPの全履歴を取得
-      const lpHistory = recentHistory
+      const landingPageHistory = recentHistory
         .filter((h) => {
-          const lpId = (h as any).landingPageId ?? (h as any).landing_page_id;
-          return lpId === lp.id;
+          const landingPageId = (h as any).landingPageId ?? (h as any).landing_page_id;
+          return landingPageId === landingPage.id;
         })
         .sort((a, b) => {
           const aDate = (a as any).createdAt ?? (a as any).created_at;
@@ -93,13 +139,13 @@ export default function LandingPages() {
           return new Date(bDate).getTime() - new Date(aDate).getTime();
         });
       
-      if (lpHistory.length > 0) {
+      if (landingPageHistory.length > 0) {
         // 最新履歴
-        const latest = lpHistory[0];
+        const latest = landingPageHistory[0];
         // 最終変更日（status === "changed"の最新履歴）
-        const lastChanged = lpHistory.find((h) => h.status === "changed");
+        const lastChanged = landingPageHistory.find((h) => h.status === "changed");
         
-        statusMap.set(lp.id, {
+        statusMap.set(landingPage.id, {
           status: latest.status,
           checkType: (latest as any).checkType ?? (latest as any).check_type,
           createdAt: (latest as any).createdAt ?? (latest as any).created_at,
@@ -121,21 +167,21 @@ export default function LandingPages() {
     return diffDays;
   };
   
-  const createMutation = trpc.lp.create.useMutation({
+  const createMutation = trpc.landingPages.create.useMutation({
     onSuccess: async (data) => {
       // 新しく作成されたLPを取得
-      const newLP = await utils.lp.list.fetch();
-      const createdLP = newLP?.find((lp) => lp.id === data.id);
+      const newLP = await utils.landingPages.list.fetch();
+      const createdLandingPage = newLP?.find((landingPage) => landingPage.id === data.id);
       
-      if (createdLP) {
+      if (createdLandingPage) {
         // Optimistic update: キャッシュを即座に更新
-        utils.lp.list.setData(undefined, (old) => {
-          if (!old) return [createdLP];
-          return [...old, createdLP];
+        utils.landingPages.list.setData(undefined, (old) => {
+          if (!old) return [createdLandingPage];
+          return [...old, createdLandingPage];
         });
       } else {
         // キャッシュを無効化して再取得
-        utils.lp.list.invalidate();
+        utils.landingPages.list.invalidate();
       }
       
       setIsAddDialogOpen(false);
@@ -210,9 +256,9 @@ export default function LandingPages() {
     },
   });
 
-  const updateMutation = trpc.lp.update.useMutation({
+  const updateMutation = trpc.landingPages.update.useMutation({
     onSuccess: () => {
-      utils.lp.list.invalidate();
+      utils.landingPages.list.invalidate();
       setIsEditDialogOpen(false);
       setEditingLP(null);
       toast.success("LPを更新しました");
@@ -222,23 +268,23 @@ export default function LandingPages() {
     },
   });
 
-  const deleteMutation = trpc.lp.delete.useMutation({
+  const deleteMutation = trpc.landingPages.delete.useMutation({
     onSuccess: (_, variables) => {
       // Optimistic update: キャッシュから即座に削除
-      utils.lp.list.setData(undefined, (old) => {
+        utils.landingPages.list.setData(undefined, (old) => {
         if (!old) return [];
-        return old.filter((lp) => lp.id !== variables.id);
+        return old.filter((landingPage) => landingPage.id !== variables.id);
       });
       toast.success("LPを削除しました");
     },
     onError: (error: any) => {
       toast.error(`エラー: ${error.message}`);
       // エラー時は再取得して整合性を保つ
-      utils.lp.list.invalidate();
+      utils.landingPages.list.invalidate();
     },
   });
 
-  const monitorMutation = trpc.lp.monitor.useMutation({
+  const monitorMutation = trpc.landingPages.monitor.useMutation({
     onMutate: async (variables) => {
       // 監視開始時：該当LPのIDを追加
       setMonitoringLpIds((prev) => new Set([...prev, variables.id]));
@@ -275,12 +321,12 @@ export default function LandingPages() {
     },
   });
 
-  const monitorAllMutation = trpc.lp.monitorAll.useMutation({
+  const monitorAllMutation = trpc.landingPages.monitorAll.useMutation({
     onMutate: async () => {
       // 全部実行開始時：全てのLPのIDを追加
       if (landingPages) {
-        const lpIds = landingPages.map((lp) => lp.id);
-        setMonitoringLpIds(new Set(lpIds));
+        const landingPageIds = landingPages.map((landingPage) => landingPage.id);
+        setMonitoringLpIds(new Set(landingPageIds));
         setIsMonitoringAll(true);
         // 開始時刻を記録（少し前の時刻を記録して、余裕を持たせる）
         monitoringAllStartTimeRef.current = Date.now() - 5000; // 5秒前から開始として記録
@@ -308,7 +354,7 @@ export default function LandingPages() {
       return;
     }
 
-    const targetLpIds = Array.from(new Set(landingPages.map((lp) => lp.id)));
+    const targetLandingPageIds = Array.from(new Set(landingPages.map((landingPage) => landingPage.id)));
     const startTime = monitoringAllStartTimeRef.current;
     // 開始時刻をさらに10秒前に設定（余裕を持たせる）
     const startTimeDate = new Date(startTime - 10000);
@@ -421,20 +467,31 @@ export default function LandingPages() {
   }, [isMonitoringAll, landingPages, utils]);
 
   // Filter, search, and sort logic
-  const filteredAndSortedLPs = useMemo(() => {
+  const filteredAndSortedLandingPages = useMemo(() => {
     if (!landingPages) return [];
-    
+
+    const q = searchQuery.toLowerCase().trim();
+
     // フィルタリング
-    let filtered = landingPages.filter((lp) => {
+    let filtered = landingPages.filter((landingPage) => {
       // Search filter
-      const matchesSearch = !searchQuery || 
-        lp.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        lp.url.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        lp.description?.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      // Tag filter (will be enhanced with actual tag data)
-      const matchesTag = !selectedTagFilter;
-      
+      const title = (landingPage.title ?? "").toLowerCase();
+      const url = landingPage.url.toLowerCase();
+      const description = (landingPage.description ?? "").toLowerCase();
+
+      const matchesSearch =
+        !q ||
+        title.includes(q) ||
+        url.includes(q) ||
+        description.includes(q);
+
+      // Tag filter: 選択したタグを持つLPのみ残す
+      let matchesTag = true;
+      if (selectedTagFilter) {
+        const tagSet = lpTagMap.get(landingPage.id);
+        matchesTag = !!tagSet && tagSet.has(selectedTagFilter);
+      }
+
       return matchesSearch && matchesTag;
     });
 
@@ -521,7 +578,7 @@ export default function LandingPages() {
     }
 
     return filtered;
-  }, [landingPages, searchQuery, selectedTagFilter, sortKey, sortDirection, lpStatusMap]);
+  }, [landingPages, searchQuery, selectedTagFilter, sortKey, sortDirection, lpStatusMap, lpTagMap]);
 
   // ソート処理
   const handleSort = (key: string) => {
@@ -561,8 +618,8 @@ export default function LandingPages() {
     });
   };
 
-  const handleEdit = (lp: { id: number; url: string; title?: string; description?: string }) => {
-    setEditingLP(lp);
+  const handleEdit = (landingPage: { id: number; url: string; title?: string; description?: string }) => {
+    setEditingLP(landingPage);
     setIsEditDialogOpen(true);
   };
 
@@ -597,6 +654,76 @@ export default function LandingPages() {
     monitorMutation.mutate({ id });
   };
 
+  // LPごとの監視ON/OFFをトグル
+  const handleToggleMonitoring = async (lpId: number, enabled: boolean) => {
+    const schedule = scheduleQuery.data;
+    if (!schedule) {
+      toast.error("まずスケジュール設定画面でスケジュールを作成してください");
+      return;
+    }
+
+    // 現在の除外IDリストを取得
+    let currentExcludedIds: number[] = [];
+    if (schedule.excludedLandingPageIds) {
+      try {
+        currentExcludedIds = JSON.parse(schedule.excludedLandingPageIds) as number[];
+      } catch (e) {
+        console.error("Failed to parse excludedLandingPageIds:", e);
+      }
+    }
+
+    const excludedSet = new Set(currentExcludedIds);
+    if (enabled) {
+      // 監視ON => 除外リストから削除
+      excludedSet.delete(lpId);
+    } else {
+      // 監視OFF => 除外リストに追加
+      excludedSet.add(lpId);
+    }
+
+    const nextExcludedIds = Array.from(excludedSet);
+
+    try {
+      await scheduleUpsert.mutateAsync({
+        intervalDays: schedule.intervalDays,
+        executeHour: schedule.executeHour ?? 9,
+        enabled: schedule.enabled,
+        excludedLandingPageIds: nextExcludedIds,
+      });
+
+      // 最新のスケジュールを取得して、このLPが本当に監視対象になったか確認
+      const refreshed = await scheduleQuery.refetch();
+      const latestSchedule = refreshed.data;
+      let actuallyExcluded = false;
+      if (latestSchedule?.excludedLandingPageIds) {
+        try {
+          const latestExcluded = JSON.parse(
+            latestSchedule.excludedLandingPageIds
+          ) as number[];
+          actuallyExcluded = latestExcluded.includes(lpId);
+        } catch (e) {
+          console.error("Failed to parse latest excludedLandingPageIds:", e);
+        }
+      }
+
+      if (enabled) {
+        if (actuallyExcluded) {
+          // プラン上限などで監視対象にできなかったケース
+          toast.warning(
+            "プランの上限により、これ以上自動監視を有効にできません。このLPは監視対象外のままです。"
+          );
+        } else {
+          toast.success("監視設定を有効にしました");
+        }
+      } else {
+        toast.success("監視設定を無効にしました");
+      }
+    } catch (error: any) {
+      console.error("Failed to update schedule monitoring toggle:", error);
+      toast.error(error.message || "監視設定の更新に失敗しました");
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -611,7 +738,9 @@ export default function LandingPages() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">LP管理</h1>
-            <p className="text-muted-foreground mt-2">登録したランディングページの一覧と管理</p>
+            <p className="text-muted-foreground mt-2">
+              ランディングページを登録し、変更を監視します
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -802,28 +931,36 @@ export default function LandingPages() {
             )}
           </div>
           
-          {/* Tag filter */}
+          {/* Tag filter - LP用タグのみ */}
           {allTags && allTags.length > 0 && (
             <Select
               value={selectedTagFilter?.toString() || "all"}
-              onValueChange={(value) => setSelectedTagFilter(value === "all" ? null : parseInt(value))}
+              onValueChange={(value) =>
+                setSelectedTagFilter(value === "all" ? null : parseInt(value))
+              }
             >
               <SelectTrigger className="w-[200px] bg-white">
                 <SelectValue placeholder="タグで絞り込み" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">すべてのタグ</SelectItem>
-                {allTags.map((tag) => (
-                  <SelectItem key={tag.id} value={tag.id.toString()}>
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: tag.color }}
-                      />
-                      {tag.name}
-                    </div>
-                  </SelectItem>
-                ))}
+                {allTags
+                  .filter(
+                    (tag: any) =>
+                      (tag as any).targetType === "lp" ||
+                      (tag as any).targetType === undefined
+                  )
+                  .map((tag) => (
+                    <SelectItem key={tag.id} value={tag.id.toString()}>
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: tag.color }}
+                        />
+                        {tag.name}
+                      </div>
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           )}
@@ -832,7 +969,7 @@ export default function LandingPages() {
       
       <Card>
         <CardContent className="pt-6">
-          {!filteredAndSortedLPs || filteredAndSortedLPs.length === 0 ? (
+          {!filteredAndSortedLandingPages || filteredAndSortedLandingPages.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               {landingPages && landingPages.length > 0 ? (
                 <>
@@ -859,80 +996,75 @@ export default function LandingPages() {
             <Table>
               <TableHeader className="bg-muted/50">
                 <TableRow>
-                  <TableHead className="text-center">
-                    <button
-                      onClick={() => handleSort("title")}
-                      className="flex items-center justify-center mx-auto hover:opacity-70 transition-opacity"
-                    >
-                      タイトル
-                      {getSortIcon("title")}
-                    </button>
+                  <TableHead
+                    className="text-center cursor-pointer select-none"
+                    onClick={() => handleSort("title")}
+                  >
+                    <div className="flex items-center justify-center">
+                      タイトル {getSortIcon("title")}
+                    </div>
                   </TableHead>
-                  <TableHead className="text-center">
-                    <button
-                      onClick={() => handleSort("url")}
-                      className="flex items-center justify-center mx-auto hover:opacity-70 transition-opacity"
-                    >
-                      URL
-                      {getSortIcon("url")}
-                    </button>
+                  <TableHead
+                    className="text-center cursor-pointer select-none"
+                    onClick={() => handleSort("url")}
+                  >
+                    <div className="flex items-center justify-center">
+                      URL {getSortIcon("url")}
+                    </div>
                   </TableHead>
-                  <TableHead className="text-center">
-                    <button
-                      onClick={() => handleSort("status")}
-                      className="flex items-center justify-center mx-auto hover:opacity-70 transition-opacity"
-                    >
-                      ステータス
-                      {getSortIcon("status")}
-                    </button>
+                  <TableHead
+                    className="text-center cursor-pointer select-none"
+                    onClick={() => handleSort("status")}
+                  >
+                    <div className="flex items-center justify-center">
+                      ステータス {getSortIcon("status")}
+                    </div>
                   </TableHead>
-                  <TableHead className="text-center">
-                    <button
-                      onClick={() => handleSort("createdAt")}
-                      className="flex items-center justify-center mx-auto hover:opacity-70 transition-opacity"
-                    >
-                      登録日
-                      {getSortIcon("createdAt")}
-                    </button>
+                  <TableHead
+                    className="text-center cursor-pointer select-none"
+                    onClick={() => handleSort("createdAt")}
+                  >
+                    <div className="flex items-center justify-center">
+                      登録日 {getSortIcon("createdAt")}
+                    </div>
                   </TableHead>
-                  <TableHead className="text-center">
-                    <button
-                      onClick={() => handleSort("lastChangedAt")}
-                      className="flex items-center justify-center mx-auto hover:opacity-70 transition-opacity"
-                    >
-                      最終変更日
-                      {getSortIcon("lastChangedAt")}
-                    </button>
+                  <TableHead
+                    className="text-center cursor-pointer select-none"
+                    onClick={() => handleSort("lastChangedAt")}
+                  >
+                    <div className="flex items-center justify-center">
+                      最終変更日 {getSortIcon("lastChangedAt")}
+                    </div>
                   </TableHead>
-                  <TableHead className="text-center">
-                    <button
-                      onClick={() => handleSort("daysSinceLastChange")}
-                      className="flex items-center justify-center mx-auto hover:opacity-70 transition-opacity"
-                    >
-                      未変更期間
-                      {getSortIcon("daysSinceLastChange")}
-                    </button>
+                  <TableHead
+                    className="text-center cursor-pointer select-none"
+                    onClick={() => handleSort("daysSinceLastChange")}
+                  >
+                    <div className="flex items-center justify-center">
+                      未変更期間 {getSortIcon("daysSinceLastChange")}
+                    </div>
                   </TableHead>
                   <TableHead className="text-center">タグ</TableHead>
                   <TableHead className="text-center">説明</TableHead>
+                  <TableHead className="text-center">監視</TableHead>
                   <TableHead className="text-center">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredAndSortedLPs.map((lp) => {
-                  const status = lpStatusMap.get(lp.id);
+                {filteredAndSortedLandingPages.map((landingPage) => {
+                  const status = lpStatusMap.get(landingPage.id);
                   const daysSinceLastChange = getDaysSinceLastChange(status?.lastChangedAt);
                   return (
-                    <TableRow key={lp.id} className="hover:bg-muted/30 transition-colors">
-                      <TableCell className="font-medium">{lp.title}</TableCell>
+                    <TableRow key={landingPage.id} className="hover:bg-muted/30 transition-colors">
+                      <TableCell className="font-medium">{landingPage.title}</TableCell>
                       <TableCell className="max-w-xs truncate">
-                        <a href={lp.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                          {lp.url}
+                        <a href={landingPage.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                          {landingPage.url}
                         </a>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-center">
                         {status ? (
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-col items-center gap-1">
                             <Badge
                               variant={
                                 status.status === "ok"
@@ -972,7 +1104,7 @@ export default function LandingPages() {
                       </TableCell>
                       <TableCell className="text-center">
                         <span className="text-sm">
-                          {new Date(lp.createdAt).toLocaleDateString("ja-JP", {
+                          {new Date(landingPage.createdAt).toLocaleDateString("ja-JP", {
                             year: "numeric",
                             month: "short",
                             day: "numeric",
@@ -987,7 +1119,7 @@ export default function LandingPages() {
                                 month: "short",
                                 day: "numeric",
                               })
-                            : new Date(lp.createdAt).toLocaleDateString("ja-JP", {
+                            : new Date(landingPage.createdAt).toLocaleDateString("ja-JP", {
                                 year: "numeric",
                                 month: "short",
                                 day: "numeric",
@@ -999,7 +1131,7 @@ export default function LandingPages() {
                           // 最終変更日がなければ登録日から計算
                           const lastChangeDate = status?.lastChangedAt 
                             ? new Date(status.lastChangedAt)
-                            : new Date(lp.createdAt);
+                            : new Date(landingPage.createdAt);
                           const now = new Date();
                           const diffTime = now.getTime() - lastChangeDate.getTime();
                           const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
@@ -1013,25 +1145,32 @@ export default function LandingPages() {
                       </TableCell>
                       <TableCell className="text-center">
                         <div className="flex items-center justify-center">
-                          <LPTagSelector landingPageId={lp.id} />
+                          <LPTagSelector landingPageId={landingPage.id} />
                         </div>
                       </TableCell>
-                      <TableCell className="max-w-xs truncate">{lp.description || "-"}</TableCell>
+                      <TableCell className="max-w-xs truncate">{landingPage.description || "-"}</TableCell>
+                      <TableCell className="text-center">
+                        <Switch
+                          checked={!excludedLpIdsFromSchedule.has(landingPage.id)}
+                          onCheckedChange={(checked) => handleToggleMonitoring(landingPage.id, checked)}
+                          disabled={scheduleUpsert.isPending || scheduleQuery.isLoading}
+                        />
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleMonitor(lp.id)}
-                            disabled={monitoringLpIds.has(lp.id) || monitorAllMutation.isPending}
-                            title={monitoringLpIds.has(lp.id) || monitorAllMutation.isPending ? "監視実行中..." : "監視を実行"}
+                            onClick={() => handleMonitor(landingPage.id)}
+                            disabled={monitoringLpIds.has(landingPage.id) || monitorAllMutation.isPending}
+                            title={monitoringLpIds.has(landingPage.id) || monitorAllMutation.isPending ? "監視実行中..." : "監視を実行"}
                           >
-                            <RefreshCw className={`w-4 h-4 ${monitoringLpIds.has(lp.id) || monitorAllMutation.isPending ? 'animate-spin' : ''}`} />
+                            <RefreshCw className={`w-4 h-4 ${monitoringLpIds.has(landingPage.id) || monitorAllMutation.isPending ? 'animate-spin' : ''}`} />
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setLocation(`/history/${lp.id}`)}
+                            onClick={() => setLocation(`/history/${landingPage.id}`)}
                             title="履歴を表示"
                           >
                             <Eye className="w-4 h-4" />
@@ -1039,7 +1178,7 @@ export default function LandingPages() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleEdit(lp)}
+                            onClick={() => handleEdit(landingPage)}
                             title="編集"
                           >
                             <Pencil className="w-4 h-4" />
@@ -1047,7 +1186,7 @@ export default function LandingPages() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleDelete(lp.id)}
+                            onClick={() => handleDelete(landingPage.id)}
                             disabled={deleteMutation.isPending}
                             title="削除"
                           >

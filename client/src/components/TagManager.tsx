@@ -33,6 +33,7 @@ export function TagManager() {
   const [isOpen, setIsOpen] = useState(false);
   const [tagName, setTagName] = useState("");
   const [selectedColor, setSelectedColor] = useState(PRESET_COLORS[0]);
+  const [activeType, setActiveType] = useState<"lp" | "creative">("lp");
 
   const { data: tags, refetch } = trpc.tags.list.useQuery();
   const createTag = trpc.tags.create.useMutation({
@@ -63,7 +64,11 @@ export function TagManager() {
       toast.error("タグ名を入力してください");
       return;
     }
-    createTag.mutate({ name: tagName.trim(), color: selectedColor });
+    createTag.mutate({
+      name: tagName.trim(),
+      color: selectedColor,
+      targetType: activeType,
+    });
   };
 
   const handleDelete = (id: number) => {
@@ -72,13 +77,44 @@ export function TagManager() {
     }
   };
 
+  const filteredTags = (tags ?? []).filter((tag: any) => {
+    const type = (tag as any).targetType ?? "lp";
+    return type === activeType;
+  });
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold flex items-center gap-2">
-          <Tag className="w-5 h-5" />
-          タグ管理
-        </h3>
+        <div className="flex items-center gap-3">
+          <h3 className="text-lg font-semibold flex items-center gap-2">
+            <Tag className="w-5 h-5" />
+            タグ管理
+          </h3>
+          <div className="flex items-center gap-1 rounded-full bg-muted p-1 text-xs">
+            <button
+              type="button"
+              onClick={() => setActiveType("lp")}
+              className={`px-3 py-1 rounded-full transition-colors ${
+                activeType === "lp"
+                  ? "bg-background shadow-sm"
+                  : "text-muted-foreground"
+              }`}
+            >
+              LP用
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveType("creative")}
+              className={`px-3 py-1 rounded-full transition-colors ${
+                activeType === "creative"
+                  ? "bg-background shadow-sm"
+                  : "text-muted-foreground"
+              }`}
+            >
+              クリエイティブ用
+            </button>
+          </div>
+        </div>
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
           <DialogTrigger asChild>
             <Button size="sm">
@@ -90,7 +126,9 @@ export function TagManager() {
             <DialogHeader>
               <DialogTitle>新しいタグを作成</DialogTitle>
               <DialogDescription>
-                LPを分類するためのタグを作成します
+                {activeType === "lp"
+                  ? "LPを分類するためのタグを作成します"
+                  : "クリエイティブを分類するためのタグを作成します"}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
@@ -136,8 +174,8 @@ export function TagManager() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {tags && tags.length > 0 ? (
-          tags.map((tag) => (
+        {filteredTags && filteredTags.length > 0 ? (
+          filteredTags.map((tag: any) => (
             <Badge
               key={tag.id}
               style={{ backgroundColor: tag.color }}
@@ -154,7 +192,9 @@ export function TagManager() {
           ))
         ) : (
           <p className="text-sm text-muted-foreground">
-            タグがありません。「新規タグ」ボタンから作成してください。
+            {activeType === "lp"
+              ? "LP用のタグがありません。「新規タグ」ボタンから作成してください。"
+              : "クリエイティブ用のタグがありません。「新規タグ」ボタンから作成してください。"}
           </p>
         )}
       </div>

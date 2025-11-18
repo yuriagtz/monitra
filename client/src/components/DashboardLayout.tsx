@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, FileText, History, BarChart3, Bell, Clock, Settings, Upload } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, FileText, Image, BarChart3, Bell, Clock, Settings, Upload } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -29,11 +29,12 @@ import { Button } from "./ui/button";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "ダッシュボード", path: "/" },
-  { icon: FileText, label: "LP管理", path: "/lps" },
+  { icon: FileText, label: "LP管理", path: "/landing-pages" },
+  { icon: Image, label: "クリエイティブ管理", path: "/creatives" },
   { icon: BarChart3, label: "分析レポート", path: "/analytics" },
   { icon: Bell, label: "通知設定", path: "/notifications" },
-  { icon: Clock, label: "スケジュール", path: "/schedules" },
-  { icon: Upload, label: "インポート/エクスポート", path: "/import-export" },
+  { icon: Clock, label: "スケジュール管理", path: "/schedules" },
+  { icon: Upload, label: "エクスポート", path: "/export" },
   { icon: Settings, label: "設定", path: "/settings" },
 ];
 

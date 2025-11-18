@@ -15,6 +15,13 @@
       "when": 1761918145615,
       "tag": "0001_flowery_stone_men",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1762530000000,
+      "tag": "0003_add_export_history",
+      "breakpoints": false
     }
   ]
 }

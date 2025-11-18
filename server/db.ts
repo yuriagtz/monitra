@@ -12,12 +12,22 @@ import {
   InsertTag,
   landingPageTags,
   InsertLandingPageTag,
+  creativeTags,
+  type InsertCreativeTag,
   notificationSettings,
   type NotificationSetting,
   type InsertNotificationSetting,
   scheduleSettings,
   type ScheduleSetting,
-  type InsertScheduleSetting
+  type InsertScheduleSetting,
+  exportHistory,
+  notificationHistory,
+  type InsertNotificationHistory,
+  creatives,
+  type Creative,
+  type InsertCreative,
+  creativeScheduleSettings,
+  type InsertCreativeScheduleSetting,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -150,12 +160,12 @@ export async function getLandingPagesByUserId(userId: number) {
   const db = await getDb();
   if (!db) return [];
   
-  const lps = await db.select().from(landingPages).where(eq(landingPages.userId, userId));
+  const landingPagesResult = await db.select().from(landingPages).where(eq(landingPages.userId, userId));
   
   // タイトルがnullまたは空文字列の場合は「無題」に設定
-  return lps.map(lp => ({
-    ...lp,
-    title: lp.title && lp.title.trim() !== "" ? lp.title : "無題"
+  return landingPagesResult.map(landingPage => ({
+    ...landingPage,
+    title: landingPage.title && landingPage.title.trim() !== "" ? landingPage.title : "無題"
   }));
 }
 
@@ -166,11 +176,11 @@ export async function getLandingPageById(id: number) {
   const result = await db.select().from(landingPages).where(eq(landingPages.id, id)).limit(1);
   if (result.length === 0) return undefined;
   
-  const lp = result[0];
+  const landingPage = result[0];
   // タイトルがnullまたは空文字列の場合は「無題」に設定
   return {
-    ...lp,
-    title: lp.title && lp.title.trim() !== "" ? lp.title : "無題"
+    ...landingPage,
+    title: landingPage.title && landingPage.title.trim() !== "" ? landingPage.title : "無題"
   };
 }
 
@@ -190,6 +200,64 @@ export async function deleteLandingPage(id: number) {
   await db.delete(landingPages).where(eq(landingPages.id, id));
 }
 
+// Creatives
+export async function createCreative(data: InsertCreative) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db
+    .insert(creatives)
+    .values(data)
+    .returning({ id: creatives.id });
+
+  return result[0].id;
+}
+
+export async function getCreativesByUserId(userId: number): Promise<Creative[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const list = await db
+    .select()
+    .from(creatives)
+    .where(eq(creatives.userId, userId));
+
+  return list;
+}
+
+export async function getCreativeById(id: number): Promise<Creative | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db
+    .select()
+    .from(creatives)
+    .where(eq(creatives.id, id))
+    .limit(1);
+
+  return result.length > 0 ? result[0] as Creative : undefined;
+}
+
+export async function updateCreative(
+  id: number,
+  data: Partial<InsertCreative>
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db
+    .update(creatives)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(creatives.id, id));
+}
+
+export async function deleteCreative(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.delete(creatives).where(eq(creatives.id, id));
+}
+
 // Monitoring History
 export async function createMonitoringHistory(data: InsertMonitoringHistory) {
   const db = await getDb();
@@ -207,6 +275,18 @@ export async function getMonitoringHistoryByLandingPageId(landingPageId: number,
     .select()
     .from(monitoringHistory)
     .where(eq(monitoringHistory.landingPageId, landingPageId))
+    .orderBy(desc(monitoringHistory.createdAt))
+    .limit(limit);
+}
+
+export async function getMonitoringHistoryByCreativeId(creativeId: number, limit = 50) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db
+    .select()
+    .from(monitoringHistory)
+    .where(eq(monitoringHistory.creativeId, creativeId))
     .orderBy(desc(monitoringHistory.createdAt))
     .limit(limit);
 }
@@ -247,6 +327,7 @@ export async function deleteTag(id: number) {
   
   // Delete tag associations first
   await db.delete(landingPageTags).where(eq(landingPageTags.tagId, id));
+  await db.delete(creativeTags).where(eq(creativeTags.tagId, id));
   // Then delete the tag
   await db.delete(tags).where(eq(tags.id, id));
 }
@@ -280,6 +361,75 @@ export async function getTagsForLandingPage(landingPageId: number) {
   .where(eq(landingPageTags.landingPageId, landingPageId));
   
   return result;
+}
+
+export async function getLandingPageTagsByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const rows = await db
+    .select({
+      landingPageId: landingPageTags.landingPageId,
+      tagId: landingPageTags.tagId,
+    })
+    .from(landingPageTags)
+    .innerJoin(landingPages, eq(landingPageTags.landingPageId, landingPages.id))
+    .where(eq(landingPages.userId, userId));
+
+  return rows;
+}
+
+export async function addTagToCreative(creativeId: number, tagId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.insert(creativeTags).values({
+    creativeId,
+    tagId,
+  } as InsertCreativeTag);
+}
+
+export async function removeTagFromCreative(creativeId: number, tagId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db
+    .delete(creativeTags)
+    .where(eq(creativeTags.creativeId, creativeId))
+    .where(eq(creativeTags.tagId, tagId));
+}
+
+export async function getTagsForCreative(creativeId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const result = await db
+    .select({
+      id: tags.id,
+      name: tags.name,
+      color: tags.color,
+    })
+    .from(creativeTags)
+    .innerJoin(tags, eq(creativeTags.tagId, tags.id))
+    .where(eq(creativeTags.creativeId, creativeId));
+
+  return result;
+}
+
+export async function getCreativeTagsByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const rows = await db
+    .select({
+      creativeId: creativeTags.creativeId,
+      tagId: creativeTags.tagId,
+    })
+    .from(creativeTags)
+    .innerJoin(creatives, eq(creativeTags.creativeId, creatives.id))
+    .where(eq(creatives.userId, userId));
+
+  return rows;
 }
 
 // Notification settings
@@ -445,6 +595,61 @@ export async function getAllScheduleSettings() {
   return await db.select().from(scheduleSettings);
 }
 
+// Creative schedule settings
+export async function getCreativeScheduleSettingsByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db
+    .select()
+    .from(creativeScheduleSettings)
+    .where(eq(creativeScheduleSettings.userId, userId))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function upsertCreativeScheduleSettings(
+  userId: number,
+  settings: Partial<InsertCreativeScheduleSetting>
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const existing = await getCreativeScheduleSettingsByUserId(userId);
+
+  const settingsToUpdate = { ...settings };
+  if (settingsToUpdate.excludedCreativeIds === undefined) {
+    delete settingsToUpdate.excludedCreativeIds;
+  }
+  if (settingsToUpdate.nextRunAt === undefined) {
+    delete settingsToUpdate.nextRunAt;
+  }
+
+  if (existing) {
+    await db
+      .update(creativeScheduleSettings)
+      .set({ ...settingsToUpdate, updatedAt: new Date() })
+      .where(eq(creativeScheduleSettings.userId, userId));
+    return existing.id;
+  } else {
+    const result = await db
+      .insert(creativeScheduleSettings)
+      .values({ userId, ...settingsToUpdate } as InsertCreativeScheduleSetting)
+      .returning({ id: creativeScheduleSettings.id });
+    return result[0].id;
+  }
+}
+
+export async function deleteCreativeScheduleSettings(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db
+    .delete(creativeScheduleSettings)
+    .where(eq(creativeScheduleSettings.userId, userId));
+}
+
 export async function upsertScheduleSettings(userId: number, settings: Partial<InsertScheduleSetting>) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -520,4 +725,61 @@ export async function deleteScheduleSettings(userId: number) {
   if (!db) throw new Error("Database not available");
   
   await db.delete(scheduleSettings).where(eq(scheduleSettings.userId, userId));
+}
+
+export async function addExportHistoryEntry(params: { userId: number; type: string; filename: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.insert(exportHistory).values({
+    userId: params.userId,
+    type: params.type,
+    filename: params.filename
+  });
+}
+
+export async function getExportHistoryByUserId(userId: number, limit: number = 20) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db
+    .select()
+    .from(exportHistory)
+    .where(eq(exportHistory.userId, userId))
+    .orderBy(desc(exportHistory.createdAt))
+    .limit(limit);
+}
+
+export async function addNotificationHistoryEntry(params: {
+  userId: number;
+  landingPageId?: number | null;
+  monitoringHistoryId?: number | null;
+  channel: string;
+  status: "pending" | "success" | "failed";
+  errorMessage?: string | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const values: InsertNotificationHistory = {
+    userId: params.userId,
+    channel: params.channel,
+    status: params.status,
+    landingPageId: params.landingPageId ?? null,
+    monitoringHistoryId: params.monitoringHistoryId ?? null,
+    errorMessage: params.errorMessage ?? null,
+    sentAt: params.status === "success" ? new Date() : null,
+  };
+
+  await db.insert(notificationHistory).values(values);
+}
+
+export async function getNotificationHistoryByUserId(userId: number, limit: number = 50) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db
+    .select()
+    .from(notificationHistory)
+    .where(eq(notificationHistory.userId, userId))
+    .orderBy(desc(notificationHistory.createdAt))
+    .limit(limit);
 }

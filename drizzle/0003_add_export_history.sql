@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS export_history (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type VARCHAR(100) NOT NULL,
+  filename TEXT,
+  created_at TIMESTAMP DEFAULT NOW() NOT NULL
+);
+

@@ -5,7 +5,7 @@ export const roleEnum = pgEnum("role", ["user", "admin"]);
 export const checkTypeEnum = pgEnum("check_type", ["content_change", "link_broken"]);
 export const statusEnum = pgEnum("status", ["ok", "changed", "error"]);
 export const scheduleTypeEnum = pgEnum("schedule_type", ["interval", "cron"]);
-export const planEnum = pgEnum("plan", ["free", "light", "pro"]);
+export const planEnum = pgEnum("plan", ["free", "light", "pro", "admin"]);
 
 /**
  * Core user table backing auth flow.
@@ -55,9 +55,13 @@ export type InsertLandingPage = typeof landingPages.$inferInsert;
 /**
  * Monitoring history for each landing page
  */
+export const targetTypeEnum = pgEnum("target_type", ["lp", "creative"]);
+
 export const monitoringHistory = pgTable("monitoring_history", {
   id: serial("id").primaryKey(),
-  landingPageId: integer("landing_page_id").notNull(),
+  landingPageId: integer("landing_page_id"),
+  creativeId: integer("creative_id"),
+  targetType: targetTypeEnum("target_type").default("lp").notNull(),
   checkType: checkTypeEnum("check_type").notNull(),
   status: statusEnum("status").notNull(),
   message: text("message"),
@@ -76,14 +80,34 @@ export type MonitoringHistory = typeof monitoringHistory.$inferSelect;
 export type InsertMonitoringHistory = typeof monitoringHistory.$inferInsert;
 
 /**
+ * Creatives (banner ads etc.) being monitored
+ */
+export const creatives = pgTable("creatives", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  imageUrl: text("image_url").notNull(),
+  landingPageId: integer("landing_page_id"),
+  targetUrl: text("target_url"),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+});
+
+export type Creative = typeof creatives.$inferSelect;
+export type InsertCreative = typeof creatives.$inferInsert;
+
+/**
  * Tags for categorizing landing pages
  */
 export const tags = pgTable("tags", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 50 }).notNull(),
   color: varchar("color", { length: 7 }).notNull(), // Hex color code
-  userId: integer("userId").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  userId: integer("user_id").notNull(),
+  // "lp" | "creative" でタグの対象を分離
+  targetType: varchar("target_type", { length: 16 }).notNull().default("lp"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export type Tag = typeof tags.$inferSelect;
@@ -94,13 +118,26 @@ export type InsertTag = typeof tags.$inferInsert;
  */
 export const landingPageTags = pgTable("landing_page_tags", {
   id: serial("id").primaryKey(),
-  landingPageId: integer("landingPageId").notNull(),
-  tagId: integer("tagId").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  landingPageId: integer("landing_page_id").notNull(),
+  tagId: integer("tag_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export type LandingPageTag = typeof landingPageTags.$inferSelect;
 export type InsertLandingPageTag = typeof landingPageTags.$inferInsert;
+
+/**
+ * Many-to-many relationship between creatives and tags
+ */
+export const creativeTags = pgTable("creative_tags", {
+  id: serial("id").primaryKey(),
+  creativeId: integer("creative_id").notNull(),
+  tagId: integer("tag_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type CreativeTag = typeof creativeTags.$inferSelect;
+export type InsertCreativeTag = typeof creativeTags.$inferInsert;
 
 /**
  * Notification settings table
@@ -165,6 +202,34 @@ export type ScheduleSetting = typeof scheduleSettings.$inferSelect;
 export type InsertScheduleSetting = typeof scheduleSettings.$inferInsert;
 
 /**
+ * Creative schedule settings table
+ * ユーザーごとに1つのスケジュール設定（全クリエイティブを一括監視）
+ */
+export const creativeScheduleSettings = pgTable("creative_schedule_settings", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().unique(),
+  enabled: boolean("enabled").default(true).notNull(),
+
+  // 監視間隔（日単位）
+  intervalDays: integer("interval_days").notNull(),
+
+  // 実行時間（時、0-23）
+  executeHour: integer("execute_hour").default(9).notNull(),
+
+  // 除外クリエイティブのIDリスト（JSON配列として保存）
+  excludedCreativeIds: text("excluded_creative_ids"),
+
+  lastRunAt: timestamp("last_run_at"),
+  nextRunAt: timestamp("next_run_at"),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+});
+
+export type CreativeScheduleSetting = typeof creativeScheduleSettings.$inferSelect;
+export type InsertCreativeScheduleSetting = typeof creativeScheduleSettings.$inferInsert;
+
+/**
  * Notification history table
  * Records notification sending history
  */
@@ -205,3 +270,17 @@ export const scheduleExecutionLog = pgTable("schedule_execution_log", {
 
 export type ScheduleExecutionLog = typeof scheduleExecutionLog.$inferSelect;
 export type InsertScheduleExecutionLog = typeof scheduleExecutionLog.$inferInsert;
+
+/**
+ * Export history table
+ */
+export const exportHistory = pgTable("export_history", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  type: varchar("type", { length: 100 }).notNull(),
+  filename: text("filename"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type ExportHistory = typeof exportHistory.$inferSelect;
+export type InsertExportHistory = typeof exportHistory.$inferInsert;
