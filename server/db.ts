@@ -875,13 +875,13 @@ export async function checkAndRecordManualMonitoring(
 
     if (dailyQuota.length > 0) {
       // 既存レコードの場合: SQLでアトミックにインクリメント
-      await client`UPDATE manual_monitoring_quota SET count = count + 1, updated_at = ${now} WHERE id = ${dailyQuota[0].id}`;
+      await client`UPDATE manual_monitoring_quota SET count = count + 1, updated_at = ${now.toISOString()} WHERE id = ${dailyQuota[0].id}`;
     } else {
       // 当日の日次カウントレコードがない場合は作成（INSERT ... ON CONFLICT DO UPDATE で競合を回避）
       try {
         await client`
           INSERT INTO manual_monitoring_quota (user_id, target_id, target_type, last_monitored_at, date, count, created_at, updated_at)
-          VALUES (${userId}, -1, 'lp', ${now}, ${today}, 1, ${now}, ${now})
+          VALUES (${userId}, -1, ${targetType}, ${now.toISOString()}, ${today}, 1, ${now.toISOString()}, ${now.toISOString()})
           ON CONFLICT DO NOTHING
         `;
         // レコードが作成されたか確認、されていない場合は別のプロセスが作成した可能性があるので、再度インクリメント
@@ -898,7 +898,7 @@ export async function checkAndRecordManualMonitoring(
           .limit(1);
         
         if (updatedQuota.length > 0 && updatedQuota[0].id) {
-          await client`UPDATE manual_monitoring_quota SET count = count + 1, updated_at = ${now} WHERE id = ${updatedQuota[0].id}`;
+          await client`UPDATE manual_monitoring_quota SET count = count + 1, updated_at = ${now.toISOString()} WHERE id = ${updatedQuota[0].id}`;
         }
       } catch (error) {
         // 競合が発生した場合は、既存レコードをインクリメント
@@ -915,7 +915,7 @@ export async function checkAndRecordManualMonitoring(
           .limit(1);
         
         if (existingQuota.length > 0 && existingQuota[0].id) {
-          await client`UPDATE manual_monitoring_quota SET count = count + 1, updated_at = ${now} WHERE id = ${existingQuota[0].id}`;
+          await client`UPDATE manual_monitoring_quota SET count = count + 1, updated_at = ${now.toISOString()} WHERE id = ${existingQuota[0].id}`;
         }
       }
     }
