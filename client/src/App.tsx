@@ -23,11 +23,25 @@ import AuthCallback from "./pages/AuthCallback";
 import { useAuth } from "./_core/hooks/useAuth";
 import { Loader2 } from "lucide-react";
 
-// ログイン済みユーザーが /login にアクセスした場合に /dashboard にリダイレクトするコンポーネント
+// ログイン済みユーザーが /login にアクセスした場合に / にリダイレクトするコンポーネント
 function LoginRedirect() {
   useEffect(() => {
     if (typeof window !== "undefined") {
-      window.location.replace("/dashboard");
+      window.location.replace("/");
+    }
+  }, []);
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+    </div>
+  );
+}
+
+// 認証済みユーザーが /dashboard にアクセスした場合に / にリダイレクトするコンポーネント
+function DashboardRedirect() {
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.location.replace("/");
     }
   }, []);
   return (
@@ -67,8 +81,9 @@ function ProtectedRoutes() {
     <DashboardLayout>
       <Switch>
         <Route path="/" component={Dashboard} />
-        <Route path="/dashboard" component={Dashboard} />
-        {/* ログイン済みで /login にアクセスした場合は /dashboard にリダイレクト */}
+        {/* /dashboard にアクセスした場合は / にリダイレクト */}
+        <Route path="/dashboard" component={DashboardRedirect} />
+        {/* ログイン済みで /login にアクセスした場合は / にリダイレクト */}
         <Route path="/login" component={LoginRedirect} />
         <Route path="/landing-pages" component={LandingPages} />
         <Route path="/history/:id" component={MonitoringHistory} />

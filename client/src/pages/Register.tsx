@@ -63,11 +63,11 @@ export default function Register() {
         const result = await utils.auth.me.refetch();
         if (result.data) {
           // 認証状態が確認できたらリダイレクト
-          window.location.href = "/dashboard";
+          window.location.href = "/";
         } else {
           // 認証状態が確認できない場合は少し待ってからリダイレクト
           setTimeout(() => {
-            window.location.href = "/dashboard";
+            window.location.href = "/";
           }, 500);
         }
       } catch (err: any) {

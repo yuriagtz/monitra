@@ -26,11 +26,11 @@ export default function Login() {
       if (result.data) {
         // 認証状態が確認できたらリダイレクト（URLを確実に変更）
         // window.location.replace を使用して、ブラウザの履歴に /login を残さない
-        window.location.replace("/dashboard");
+        window.location.replace("/");
       } else {
         // 認証状態が確認できない場合は少し待ってからリダイレクト
         setTimeout(() => {
-          window.location.replace("/dashboard");
+          window.location.replace("/");
         }, 500);
       }
     },

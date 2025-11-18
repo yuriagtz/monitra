@@ -15,7 +15,7 @@ export default function AuthCallback() {
         const { data: { session: existingSession } } = await supabase.auth.getSession();
         if (existingSession) {
           // User is already authenticated, redirect to dashboard
-          window.location.href = "/dashboard";
+          window.location.href = "/";
           return;
         }
 
@@ -42,7 +42,7 @@ export default function AuthCallback() {
 
           if (data.session) {
             // Successfully authenticated, redirect to dashboard
-            window.location.href = "/dashboard";
+            window.location.href = "/";
             return;
           }
         }
@@ -73,7 +73,7 @@ export default function AuthCallback() {
               }
 
               if (data.session) {
-                window.location.href = "/dashboard";
+                window.location.href = "/";
                 return;
               }
             }
@@ -87,7 +87,7 @@ export default function AuthCallback() {
               // Check if user is already logged in
               const { data: { session } } = await supabase.auth.getSession();
               if (session) {
-                window.location.href = "/dashboard";
+                window.location.href = "/";
                 return;
               }
               setError("認証に失敗しました: " + exchangeError.message);
@@ -99,7 +99,7 @@ export default function AuthCallback() {
 
             if (data.session) {
               // Successfully authenticated, redirect to dashboard
-              window.location.href = "/dashboard";
+              window.location.href = "/";
               return;
             }
           }
@@ -108,7 +108,7 @@ export default function AuthCallback() {
         // If we reach here, check if there's a session anyway
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-          window.location.href = "/dashboard";
+          window.location.href = "/";
           return;
         }
 
@@ -122,7 +122,7 @@ export default function AuthCallback() {
         // Check if user is logged in despite the error
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-          window.location.href = "/dashboard";
+          window.location.href = "/";
           return;
         }
         setError("認証処理中にエラーが発生しました: " + err.message);
