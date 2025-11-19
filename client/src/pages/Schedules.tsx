@@ -48,6 +48,7 @@ export default function Schedules() {
   const resetCreativeSchedule = trpc.creativeSchedules.reset.useMutation();
 
   const currentSchedule = scheduleQuery.data;
+  const currentCreativeSchedule = creativeScheduleQuery.data;
   const [intervalDays, setIntervalDays] = useState<number>(() => {
     if (currentSchedule?.intervalDays) {
       return currentSchedule.intervalDays;
@@ -66,7 +67,6 @@ export default function Schedules() {
   const [tempExcludedLpIds, setTempExcludedLpIds] = useState<Set<number>>(new Set());
 
   // Creative schedule states
-  const currentCreativeSchedule = creativeScheduleQuery.data;
   const [creativeIntervalDays, setCreativeIntervalDays] = useState<number>(() => {
     const plan = (user?.plan as "free" | "light" | "pro" | "admin") || "free";
     return currentCreativeSchedule?.intervalDays || getMinIntervalDays(plan);
