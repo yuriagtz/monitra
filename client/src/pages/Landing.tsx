@@ -292,14 +292,6 @@ export default function Landing() {
                 <TableCell className="text-center">¥2,980/月</TableCell>
               </TableRow>
               
-              {/* 自動での変更チェック間隔 */}
-              <TableRow>
-                <TableCell className="font-medium">自動での変更チェック間隔</TableCell>
-                <TableCell className="text-center">{PLAN_CONFIG.free.minIntervalDays}日ごと</TableCell>
-                <TableCell className="text-center">{PLAN_CONFIG.light.minIntervalDays}日ごと</TableCell>
-                <TableCell className="text-center">{PLAN_CONFIG.pro.minIntervalDays}日ごと</TableCell>
-              </TableRow>
-              
               {/* 監視可能なLP数 */}
               <TableRow>
                 <TableCell className="font-medium">監視可能なLP数</TableCell>
@@ -316,9 +308,17 @@ export default function Landing() {
                 <TableCell className="text-center">{PLAN_CONFIG.pro.maxCreativeCount}件</TableCell>
               </TableRow>
               
-              {/* 手動での監視実行回数（1日あたり） */}
+              {/* 自動での変更チェック間隔 */}
               <TableRow>
-                <TableCell className="font-medium">手動での監視実行回数（1日あたり）</TableCell>
+                <TableCell className="font-medium">自動での変更チェック間隔</TableCell>
+                <TableCell className="text-center">{PLAN_CONFIG.free.minIntervalDays}日ごと</TableCell>
+                <TableCell className="text-center">{PLAN_CONFIG.light.minIntervalDays}日ごと</TableCell>
+                <TableCell className="text-center">{PLAN_CONFIG.pro.minIntervalDays}日ごと</TableCell>
+              </TableRow>
+              
+              {/* 手動での変更チェック実行回数（1日あたり） */}
+              <TableRow>
+                <TableCell className="font-medium">手動での変更チェック実行回数（1日あたり）</TableCell>
                 <TableCell className="text-center">{PLAN_CONFIG.free.maxDailyManualMonitorCount}回</TableCell>
                 <TableCell className="text-center">{PLAN_CONFIG.light.maxDailyManualMonitorCount}回</TableCell>
                 <TableCell className="text-center">{PLAN_CONFIG.pro.maxDailyManualMonitorCount}回</TableCell>
@@ -332,9 +332,9 @@ export default function Landing() {
                 <TableCell className="text-center">{PLAN_CONFIG.pro.historyRetentionDays}日間</TableCell>
               </TableRow>
               
-              {/* 自動変更検知 */}
+              {/* 自動変更検知・リンク切れチェック */}
               <TableRow>
-                <TableCell className="font-medium">自動変更検知</TableCell>
+                <TableCell className="font-medium">自動変更検知・リンク切れチェック</TableCell>
                 <TableCell className="text-center">
                   <Check className="w-5 h-5 text-green-600 mx-auto" />
                 </TableCell>
@@ -346,9 +346,9 @@ export default function Landing() {
                 </TableCell>
               </TableRow>
               
-              {/* リンク切れチェック */}
+              {/* カスタムスケジュール設定 */}
               <TableRow>
-                <TableCell className="font-medium">リンク切れチェック</TableCell>
+                <TableCell className="font-medium">カスタムスケジュール設定</TableCell>
                 <TableCell className="text-center">
                   <Check className="w-5 h-5 text-green-600 mx-auto" />
                 </TableCell>
@@ -421,20 +421,6 @@ export default function Landing() {
                 <TableCell className="font-medium">Chatwork通知</TableCell>
                 <TableCell className="text-center">
                   <X className="w-5 h-5 text-gray-400 mx-auto" />
-                </TableCell>
-                <TableCell className="text-center">
-                  <Check className="w-5 h-5 text-green-600 mx-auto" />
-                </TableCell>
-                <TableCell className="text-center">
-                  <Check className="w-5 h-5 text-green-600 mx-auto" />
-                </TableCell>
-              </TableRow>
-              
-              {/* カスタムスケジュール設定 */}
-              <TableRow>
-                <TableCell className="font-medium">カスタムスケジュール設定</TableCell>
-                <TableCell className="text-center">
-                  <Check className="w-5 h-5 text-green-600 mx-auto" />
                 </TableCell>
                 <TableCell className="text-center">
                   <Check className="w-5 h-5 text-green-600 mx-auto" />
