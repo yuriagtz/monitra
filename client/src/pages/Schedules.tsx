@@ -61,7 +61,10 @@ export default function Schedules() {
 
   // Creative schedule states
   const currentCreativeSchedule = creativeScheduleQuery.data;
-  const [creativeIntervalDays, setCreativeIntervalDays] = useState<number>(currentCreativeSchedule?.intervalDays || 3);
+  const [creativeIntervalDays, setCreativeIntervalDays] = useState<number>(() => {
+    const plan = (user?.plan as "free" | "light" | "pro" | "admin") || "free";
+    return currentCreativeSchedule?.intervalDays || getMinIntervalDays(plan);
+  });
   const [creativeExecuteHour, setCreativeExecuteHour] = useState<number>(currentCreativeSchedule?.executeHour ?? 9);
   const [hasShownCreativeAutoAdjustmentToast, setHasShownCreativeAutoAdjustmentToast] = useState(false);
   const creativeEnabled = currentCreativeSchedule ? Boolean(currentCreativeSchedule.enabled) : false;
@@ -197,21 +200,31 @@ export default function Schedules() {
   // 既存のスケジュールがある場合は、その値を初期値として設定
   useEffect(() => {
     if (currentSchedule) {
-      const previousIntervalDays = intervalDays;
-      setIntervalDays(currentSchedule.intervalDays);
-      setExecuteHour(currentSchedule.executeHour ?? 9);
-      
-      // プランに応じて自動調整された場合（間隔が増加した場合）に通知
-      if (previousIntervalDays > 0 && currentSchedule.intervalDays > previousIntervalDays && !hasShownAutoAdjustmentToast) {
-        const plan = (user?.plan as "free" | "light" | "pro" | "admin") || "free";
-        const planMinIntervalDays = getMinIntervalDays(plan);
-        if (currentSchedule.intervalDays === planMinIntervalDays) {
-          toast.info(`監視間隔を${currentSchedule.intervalDays}日に自動調整しました（プランに応じた最小間隔）`);
-          setHasShownAutoAdjustmentToast(true);
+      // 現在の入力値とサーバーの値を比較し、異なる場合のみ更新
+      // これにより、ユーザーが入力中の値が上書きされるのを防ぐ
+      if (currentSchedule.intervalDays !== intervalDays) {
+        const previousIntervalDays = intervalDays;
+        setIntervalDays(currentSchedule.intervalDays);
+        
+        // プランに応じて自動調整された場合（間隔が増加した場合）に通知
+        if (previousIntervalDays > 0 && currentSchedule.intervalDays > previousIntervalDays && !hasShownAutoAdjustmentToast) {
+          const plan = (user?.plan as "free" | "light" | "pro" | "admin") || "free";
+          const planMinIntervalDays = getMinIntervalDays(plan);
+          if (currentSchedule.intervalDays === planMinIntervalDays) {
+            toast.info(`監視間隔を${currentSchedule.intervalDays}日に自動調整しました（プランに応じた最小間隔）`);
+            setHasShownAutoAdjustmentToast(true);
+          }
         }
       }
+      
+      if (currentSchedule.executeHour !== executeHour) {
+        setExecuteHour(currentSchedule.executeHour ?? 9);
+      }
+    } else {
+      // スケジュールがない場合は、最小間隔を初期値として設定
+      setIntervalDays(minIntervalDays);
     }
-  }, [currentSchedule, user?.plan, hasShownAutoAdjustmentToast, intervalDays]);
+  }, [currentSchedule?.intervalDays, currentSchedule?.executeHour, user?.plan, minIntervalDays]);
 
   // 入力値変更の有無（ダーティ状態）を判定
   // 最初の設定がない場合は常に保存可能
@@ -322,20 +335,30 @@ export default function Schedules() {
 
   useEffect(() => {
     if (currentCreativeSchedule) {
-      const previousIntervalDays = creativeIntervalDays;
-      setCreativeIntervalDays(currentCreativeSchedule.intervalDays);
-      setCreativeExecuteHour(currentCreativeSchedule.executeHour ?? 9);
-      
-      if (previousIntervalDays > 0 && currentCreativeSchedule.intervalDays > previousIntervalDays && !hasShownCreativeAutoAdjustmentToast) {
-        const plan = (user?.plan as "free" | "light" | "pro" | "admin") || "free";
-        const planMinIntervalDays = getMinIntervalDays(plan);
-        if (currentCreativeSchedule.intervalDays === planMinIntervalDays) {
-          toast.info(`監視間隔を${currentCreativeSchedule.intervalDays}日に自動調整しました（プランに応じた最小間隔）`);
-          setHasShownCreativeAutoAdjustmentToast(true);
+      // 現在の入力値とサーバーの値を比較し、異なる場合のみ更新
+      // これにより、ユーザーが入力中の値が上書きされるのを防ぐ
+      if (currentCreativeSchedule.intervalDays !== creativeIntervalDays) {
+        const previousIntervalDays = creativeIntervalDays;
+        setCreativeIntervalDays(currentCreativeSchedule.intervalDays);
+        
+        if (previousIntervalDays > 0 && currentCreativeSchedule.intervalDays > previousIntervalDays && !hasShownCreativeAutoAdjustmentToast) {
+          const plan = (user?.plan as "free" | "light" | "pro" | "admin") || "free";
+          const planMinIntervalDays = getMinIntervalDays(plan);
+          if (currentCreativeSchedule.intervalDays === planMinIntervalDays) {
+            toast.info(`監視間隔を${currentCreativeSchedule.intervalDays}日に自動調整しました（プランに応じた最小間隔）`);
+            setHasShownCreativeAutoAdjustmentToast(true);
+          }
         }
       }
+      
+      if (currentCreativeSchedule.executeHour !== creativeExecuteHour) {
+        setCreativeExecuteHour(currentCreativeSchedule.executeHour ?? 9);
+      }
+    } else {
+      // スケジュールがない場合は、最小間隔を初期値として設定
+      setCreativeIntervalDays(minIntervalDays);
     }
-  }, [currentCreativeSchedule, user?.plan, hasShownCreativeAutoAdjustmentToast, creativeIntervalDays]);
+  }, [currentCreativeSchedule?.intervalDays, currentCreativeSchedule?.executeHour, user?.plan, minIntervalDays]);
 
   useEffect(() => {
     if (currentCreativeSchedule?.excludedCreativeIds) {
