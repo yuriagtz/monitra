@@ -240,7 +240,7 @@ export default function Landing() {
             <CardHeader>
               <CardTitle className="text-2xl">プロプラン</CardTitle>
               <div className="text-4xl font-bold mt-4">
-                ¥2,980
+                ¥4,980
                 <span className="text-lg font-normal text-gray-600">/月</span>
               </div>
               <CardDescription className="text-base mt-2">ビジネス利用に最適</CardDescription>
@@ -304,7 +304,7 @@ export default function Landing() {
                 <TableCell className="font-medium">月額料金</TableCell>
                 <TableCell className="text-center">無料</TableCell>
                 <TableCell className="text-center">¥980/月</TableCell>
-                <TableCell className="text-center">¥2,980/月</TableCell>
+                <TableCell className="text-center">¥4,980/月</TableCell>
               </TableRow>
               
               {/* 監視可能なLP数 */}
