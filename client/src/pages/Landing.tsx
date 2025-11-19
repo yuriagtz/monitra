@@ -1,9 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Check, Eye, Bell, BarChart3, Clock, Shield, X } from "lucide-react";
+import { Check, Bell, BarChart3, Clock, Shield, X } from "lucide-react";
 import { useLocation } from "wouter";
 import { PLAN_CONFIG } from "@/_core/plan";
+import { APP_LOGO } from "@/const";
 
 export default function Landing() {
   const [, setLocation] = useLocation();
@@ -14,12 +15,11 @@ export default function Landing() {
       <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-blue-400 rounded-lg flex items-center justify-center">
-              <Eye className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">
-              Monitra
-            </span>
+            <img
+              src={APP_LOGO}
+              alt="Monitra"
+              className="h-8 w-auto object-contain"
+            />
           </div>
           <div className="flex items-center gap-4">
             <Button variant="ghost" onClick={() => setLocation("/login")}>
