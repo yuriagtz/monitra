@@ -916,6 +916,26 @@ export const appRouter = router({
         ignoreFirstViewOnly: z.boolean().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        // フリープランではメール通知のみ許可
+        const userPlan = (ctx.user.plan as "free" | "light" | "pro" | "admin") || "free";
+        if (userPlan === "free") {
+          // フリープランがSlack/Discord/Chatworkを有効化しようとした場合
+          if (input.slackEnabled === true || input.discordEnabled === true || input.chatworkEnabled === true) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "Slack、Discord、Chatwork通知はライトプラン以上でご利用いただけます。",
+            });
+          }
+          // フリープランがSlack/Discord/Chatworkの設定を変更しようとした場合
+          if (input.slackWebhookUrl !== undefined || input.discordWebhookUrl !== undefined || 
+              input.chatworkApiToken !== undefined || input.chatworkRoomId !== undefined) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "Slack、Discord、Chatwork通知はライトプラン以上でご利用いただけます。",
+            });
+          }
+        }
+        
         // Drizzleのbooleanカラムにそのままbooleanを渡す
         const dbInput: any = {};
         if (input.emailEnabled !== undefined) dbInput.emailEnabled = input.emailEnabled;
@@ -939,6 +959,15 @@ export const appRouter = router({
     testNotification: protectedProcedure
       .input(z.object({ channel: z.enum(['email', 'slack', 'discord', 'chatwork']) }))
       .mutation(async ({ ctx, input }) => {
+        // フリープランではメール通知のみ許可
+        const userPlan = (ctx.user.plan as "free" | "light" | "pro" | "admin") || "free";
+        if (userPlan === "free" && input.channel !== "email") {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: `${input.channel}通知のテストはライトプラン以上でご利用いただけます。`,
+          });
+        }
+        
         const settings = await db.getNotificationSettings(ctx.user.id);
         if (!settings) {
           throw new Error('通知設定が見つかりません');

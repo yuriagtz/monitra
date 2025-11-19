@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { trpc } from "@/lib/trpc";
 import { Loader2, Mail, MessageSquare, Send } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -28,12 +29,24 @@ const initialFormData = {
 type FormData = typeof initialFormData;
 
 export default function Notifications() {
+  const { data: user } = trpc.auth.me.useQuery();
   const { data: settings, isLoading, refetch } = trpc.notifications.getSettings.useQuery();
-  const updateSettings = trpc.notifications.updateSettings.useMutation();
-  const testNotification = trpc.notifications.testNotification.useMutation();
+  const updateSettings = trpc.notifications.updateSettings.useMutation({
+    onError: (error) => {
+      toast.error(error.message || "保存に失敗しました");
+    },
+  });
+  const testNotification = trpc.notifications.testNotification.useMutation({
+    onError: (error) => {
+      toast.error(error.message || "テスト通知の送信に失敗しました");
+    },
+  });
 
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [savedData, setSavedData] = useState<FormData>(initialFormData);
+  
+  // フリープランかどうかを判定
+  const isFreePlan = (user?.plan as "free" | "light" | "pro" | "admin") === "free";
 
   useEffect(() => {
     if (settings) {
@@ -209,24 +222,43 @@ export default function Notifications() {
               <MessageSquare className="w-5 h-5" />
               <div>
                 <CardTitle>Slack通知</CardTitle>
-                <CardDescription>Incoming WebhookでSlackに通知</CardDescription>
+                <CardDescription>
+                  Incoming WebhookでSlackに通知
+                  {isFreePlan && (
+                    <span className="block mt-1 text-amber-600">
+                      ※ ライトプラン以上でご利用いただけます
+                    </span>
+                  )}
+                </CardDescription>
               </div>
             </div>
-            <Switch
-              checked={formData.slackEnabled}
-              onCheckedChange={async (checked) => {
-                setFormData({ ...formData, slackEnabled: checked });
-                try {
-                  await updateSettings.mutateAsync({ slackEnabled: checked });
-                  const next = { ...savedData, slackEnabled: checked };
-                  setSavedData(next);
-                  toast.success(`Slack通知を${checked ? "有効" : "無効"}にしました`);
-                  refetch();
-                } catch (error) {
-                  toast.error("Slack通知の更新に失敗しました");
-                }
-              }}
-            />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Switch
+                    checked={formData.slackEnabled}
+                    disabled={isFreePlan}
+                    onCheckedChange={async (checked) => {
+                      setFormData({ ...formData, slackEnabled: checked });
+                      try {
+                        await updateSettings.mutateAsync({ slackEnabled: checked });
+                        const next = { ...savedData, slackEnabled: checked };
+                        setSavedData(next);
+                        toast.success(`Slack通知を${checked ? "有効" : "無効"}にしました`);
+                        refetch();
+                      } catch (error) {
+                        // エラーはmutationのonErrorで処理される
+                      }
+                    }}
+                  />
+                </span>
+              </TooltipTrigger>
+              {isFreePlan && (
+                <TooltipContent>
+                  <p>Slack通知はライトプラン以上でご利用いただけます</p>
+                </TooltipContent>
+              )}
+            </Tooltip>
           </div>
         </CardHeader>
         {formData.slackEnabled && (
@@ -242,6 +274,7 @@ export default function Notifications() {
                   setFormData({ ...formData, slackWebhookUrl: e.target.value })
                 }
                 className="bg-white"
+                disabled={isFreePlan}
               />
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-start sm:gap-2">
@@ -264,6 +297,7 @@ export default function Notifications() {
                 size="sm"
                 onClick={() => handleTest("slack")}
                 disabled={
+                  isFreePlan ||
                   !formData.slackWebhookUrl ||
                   testNotification.isPending ||
                   hasSlackChanges
@@ -286,24 +320,43 @@ export default function Notifications() {
               <MessageSquare className="w-5 h-5" />
               <div>
                 <CardTitle>Discord通知</CardTitle>
-                <CardDescription>WebhookでDiscordに通知</CardDescription>
+                <CardDescription>
+                  WebhookでDiscordに通知
+                  {isFreePlan && (
+                    <span className="block mt-1 text-amber-600">
+                      ※ ライトプラン以上でご利用いただけます
+                    </span>
+                  )}
+                </CardDescription>
               </div>
             </div>
-            <Switch
-              checked={formData.discordEnabled}
-              onCheckedChange={async (checked) => {
-                setFormData({ ...formData, discordEnabled: checked });
-                try {
-                  await updateSettings.mutateAsync({ discordEnabled: checked });
-                  const next = { ...savedData, discordEnabled: checked };
-                  setSavedData(next);
-                  toast.success(`Discord通知を${checked ? "有効" : "無効"}にしました`);
-                  refetch();
-                } catch (error) {
-                  toast.error("Discord通知の更新に失敗しました");
-                }
-              }}
-            />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Switch
+                    checked={formData.discordEnabled}
+                    disabled={isFreePlan}
+                    onCheckedChange={async (checked) => {
+                      setFormData({ ...formData, discordEnabled: checked });
+                      try {
+                        await updateSettings.mutateAsync({ discordEnabled: checked });
+                        const next = { ...savedData, discordEnabled: checked };
+                        setSavedData(next);
+                        toast.success(`Discord通知を${checked ? "有効" : "無効"}にしました`);
+                        refetch();
+                      } catch (error) {
+                        // エラーはmutationのonErrorで処理される
+                      }
+                    }}
+                  />
+                </span>
+              </TooltipTrigger>
+              {isFreePlan && (
+                <TooltipContent>
+                  <p>Discord通知はライトプラン以上でご利用いただけます</p>
+                </TooltipContent>
+              )}
+            </Tooltip>
           </div>
         </CardHeader>
         {formData.discordEnabled && (
@@ -319,6 +372,7 @@ export default function Notifications() {
                   setFormData({ ...formData, discordWebhookUrl: e.target.value })
                 }
                 className="bg-white"
+                disabled={isFreePlan}
               />
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-start sm:gap-2">
@@ -341,6 +395,7 @@ export default function Notifications() {
                 size="sm"
                 onClick={() => handleTest("discord")}
                 disabled={
+                  isFreePlan ||
                   !formData.discordWebhookUrl ||
                   testNotification.isPending ||
                   hasDiscordChanges
@@ -363,24 +418,43 @@ export default function Notifications() {
               <MessageSquare className="w-5 h-5" />
               <div>
                 <CardTitle>Chatwork通知</CardTitle>
-                <CardDescription>Chatwork APIで通知</CardDescription>
+                <CardDescription>
+                  Chatwork APIで通知
+                  {isFreePlan && (
+                    <span className="block mt-1 text-amber-600">
+                      ※ ライトプラン以上でご利用いただけます
+                    </span>
+                  )}
+                </CardDescription>
               </div>
             </div>
-            <Switch
-              checked={formData.chatworkEnabled}
-              onCheckedChange={async (checked) => {
-                setFormData({ ...formData, chatworkEnabled: checked });
-                try {
-                  await updateSettings.mutateAsync({ chatworkEnabled: checked });
-                  const next = { ...savedData, chatworkEnabled: checked };
-                  setSavedData(next);
-                  toast.success(`Chatwork通知を${checked ? "有効" : "無効"}にしました`);
-                  refetch();
-                } catch (error) {
-                  toast.error("Chatwork通知の更新に失敗しました");
-                }
-              }}
-            />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Switch
+                    checked={formData.chatworkEnabled}
+                    disabled={isFreePlan}
+                    onCheckedChange={async (checked) => {
+                      setFormData({ ...formData, chatworkEnabled: checked });
+                      try {
+                        await updateSettings.mutateAsync({ chatworkEnabled: checked });
+                        const next = { ...savedData, chatworkEnabled: checked };
+                        setSavedData(next);
+                        toast.success(`Chatwork通知を${checked ? "有効" : "無効"}にしました`);
+                        refetch();
+                      } catch (error) {
+                        // エラーはmutationのonErrorで処理される
+                      }
+                    }}
+                  />
+                </span>
+              </TooltipTrigger>
+              {isFreePlan && (
+                <TooltipContent>
+                  <p>Chatwork通知はライトプラン以上でご利用いただけます</p>
+                </TooltipContent>
+              )}
+            </Tooltip>
           </div>
         </CardHeader>
         {formData.chatworkEnabled && (
@@ -396,6 +470,7 @@ export default function Notifications() {
                   setFormData({ ...formData, chatworkApiToken: e.target.value })
                 }
                 className="bg-white"
+                disabled={isFreePlan}
               />
             </div>
             <div className="space-y-2">
@@ -408,6 +483,7 @@ export default function Notifications() {
                   setFormData({ ...formData, chatworkRoomId: e.target.value })
                 }
                 className="bg-white"
+                disabled={isFreePlan}
               />
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-start sm:gap-2">
@@ -430,6 +506,7 @@ export default function Notifications() {
                 size="sm"
                 onClick={() => handleTest("chatwork")}
                 disabled={
+                  isFreePlan ||
                   !formData.chatworkApiToken ||
                   !formData.chatworkRoomId ||
                   testNotification.isPending ||
