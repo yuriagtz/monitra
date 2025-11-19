@@ -233,9 +233,9 @@ export default function Schedules() {
 
   // Creative schedule handlers
   const handleSaveCreativeSchedule = async () => {
+    // バリデーション（警告のみ、サーバー側で自動調整される）
     if (creativeIntervalDays < minIntervalDays) {
-      toast.error(`監視間隔は${minIntervalDays}日以上である必要があります`);
-      return;
+      toast.warning(`監視間隔は${minIntervalDays}日以上である必要があります。自動調整します。`);
     }
     if (creativeIntervalDays < 1) {
       toast.error("監視間隔は1日以上である必要があります");
@@ -254,12 +254,13 @@ export default function Schedules() {
         toast.success(`監視間隔を${result.adjustedIntervalDays}日に自動調整しました（プランに応じた最小間隔）`);
         setCreativeIntervalDays(result.adjustedIntervalDays);
       } else {
-        toast.success("スケジュールを保存しました");
+        toast.success("クリエイティブスケジュールを保存しました");
       }
       
-      await new Promise(resolve => setTimeout(resolve, 200));
-      refetchCreativeSchedules();
-      creativeScheduleQuery.refetch();
+      // 少し待ってから再取得（データベースの更新を確実に反映）
+      await new Promise(resolve => setTimeout(resolve, 500));
+      await creativeScheduleQuery.refetch();
+      await refetchCreativeSchedules();
     } catch (error: any) {
       toast.error(error.message || "保存に失敗しました");
     }
