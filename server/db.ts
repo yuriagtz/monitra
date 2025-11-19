@@ -813,7 +813,15 @@ export async function checkAndRecordManualMonitoring(
   const { PLAN_CONFIG } = await import("./_core/plan");
   const planConfig = PLAN_CONFIG[plan];
   const now = new Date();
-  const today = now.toISOString().split("T")[0]; // YYYY-MM-DD
+  // JST基準で今日の日付を取得（YYYY-MM-DD）
+  const timezone = 'Asia/Tokyo';
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const today = formatter.format(now); // YYYY-MM-DD (JST基準)
   const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000); // 1時間前
 
   // 1. 同一対象への最短間隔チェック（管理者プラン以外: 1時間）
@@ -977,7 +985,15 @@ export async function getManualMonitoringQuota(
   const { PLAN_CONFIG } = await import("./_core/plan");
   const planConfig = PLAN_CONFIG[plan];
   const now = new Date();
-  const today = now.toISOString().split("T")[0]; // YYYY-MM-DD
+  // JST基準で今日の日付を取得（YYYY-MM-DD）
+  const timezone = 'Asia/Tokyo';
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const today = formatter.format(now); // YYYY-MM-DD (JST基準)
 
   // 日次カウント用のレコード（targetId = -1）
   const dailyQuota = await db

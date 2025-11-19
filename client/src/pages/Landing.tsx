@@ -57,7 +57,7 @@ export default function Landing() {
               今すぐ始める
             </Button>
           </div>
-          <p className="text-sm text-gray-500">無料プランからご利用いただけます</p>
+          <p className="text-sm text-gray-500">無料プランからご利用いただけます。まずはお試しください。</p>
         </div>
       </section>
 
@@ -150,7 +150,7 @@ export default function Landing() {
       <section className="container mx-auto px-4 py-20 bg-gray-50">
         <div className="text-center mb-12">
           <h2 className="text-3xl md:text-4xl font-bold mb-4">シンプルな料金プラン</h2>
-          <p className="text-lg text-gray-600">用途に合わせて最適なプランを選択できます</p>
+          <p className="text-lg text-gray-600">用途に合わせて最適なプランを選択できます。</p>
         </div>
         <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
           {/* Free Plan */}
@@ -285,7 +285,7 @@ export default function Landing() {
         <div className="text-center mb-12">
           <h2 className="text-3xl md:text-4xl font-bold mb-4">プラン詳細比較</h2>
           <p className="text-lg text-gray-600">
-            各プランの機能を詳しく比較できます
+            各プランの機能を詳しく比較できます。
           </p>
         </div>
         <div className="max-w-6xl mx-auto overflow-x-auto">
@@ -470,7 +470,7 @@ export default function Landing() {
             今すぐMonitraで、LPとクリエイティブの管理を自動化しましょう
           </h2>
           <p className="text-lg text-gray-600">
-            無料プランからご利用いただけます。クレジットカード登録不要。
+            クレジットカード登録不要で、無料プランからご利用いただけます。
           </p>
           <Button size="lg" className="text-lg px-8 py-6" onClick={() => setLocation("/register")}>
             今すぐ始める
