@@ -981,7 +981,11 @@ export const appRouter = router({
       }),
     
     testNotification: protectedProcedure
-      .input(z.object({ channel: z.enum(['email', 'slack', 'discord', 'chatwork']) }))
+      .input(z.object({ 
+        channel: z.enum(['email', 'slack', 'discord', 'chatwork']),
+        // テスト送信時に使用するメールアドレス（オプショナル、未保存のメールアドレスでもテスト可能）
+        emailAddress: z.string().email().optional(),
+      }))
       .mutation(async ({ ctx, input }) => {
         // フリープランではメール通知のみ許可
         const userPlan = (ctx.user.plan as "free" | "light" | "pro" | "admin") || "free";
@@ -1011,8 +1015,10 @@ export const appRouter = router({
         
         switch (input.channel) {
           case 'email':
-            if (settings.emailEnabled && settings.emailAddress) {
-              result = await sendEmailNotification(settings.emailAddress, testPayload);
+            // 引数で渡されたメールアドレスを優先、なければ保存済みのメールアドレスを使用
+            const emailToUse = input.emailAddress || settings.emailAddress;
+            if (settings.emailEnabled && emailToUse) {
+              result = await sendEmailNotification(emailToUse, testPayload);
             }
             break;
           case 'slack':

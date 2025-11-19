@@ -85,7 +85,11 @@ export default function Notifications() {
 
   const handleTest = async (channel: 'email' | 'slack' | 'discord' | 'chatwork') => {
     try {
-      const result = await testNotification.mutateAsync({ channel });
+      const result = await testNotification.mutateAsync({ 
+        channel,
+        // メール通知の場合は、入力中のメールアドレスも渡す（未保存でもテスト可能）
+        ...(channel === 'email' && formData.emailAddress ? { emailAddress: formData.emailAddress } : {}),
+      });
       if (result.success) {
         toast.success(`${channel}のテスト通知を送信しました`);
       } else {
