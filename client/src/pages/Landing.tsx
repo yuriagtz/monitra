@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Check, Bell, BarChart3, Clock, Shield, X } from "lucide-react";
+import { Check, Eye, Bell, BarChart3, Clock, Shield, X } from "lucide-react";
 import { useLocation } from "wouter";
 import { PLAN_CONFIG } from "@/_core/plan";
 import { APP_LOGO } from "@/const";
