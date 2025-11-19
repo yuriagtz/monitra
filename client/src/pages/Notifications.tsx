@@ -72,11 +72,22 @@ export default function Notifications() {
 
   const handleSave = async () => {
     try {
-      const payload = formData;
+      // フリープランの場合は、Slack/Discord/Chatwork関連のフィールドを除外
+      const payload: any = { ...formData };
+      if (isFreePlan) {
+        // フリープランの場合は、Slack/Discord/Chatwork関連のフィールドを削除
+        delete payload.slackEnabled;
+        delete payload.slackWebhookUrl;
+        delete payload.discordEnabled;
+        delete payload.discordWebhookUrl;
+        delete payload.chatworkEnabled;
+        delete payload.chatworkApiToken;
+        delete payload.chatworkRoomId;
+      }
       await updateSettings.mutateAsync(payload);
       toast.success("通知設定を保存しました");
       // 全体を保存したので、savedData も現在のフォーム状態で更新
-      setSavedData(payload);
+      setSavedData(formData);
       refetch();
     } catch (error: any) {
       // エラーはmutationのonErrorで処理されるが、念のためここでもログを出力
