@@ -1,4 +1,4 @@
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, lt, sql, inArray, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { 
@@ -1000,5 +1000,96 @@ export async function getManualMonitoringQuota(
     currentCount,
     maxCount,
     remainingCount,
+  };
+}
+
+/**
+ * 古い監視履歴を削除（プラン別の保存期間に基づく）
+ * @param userId ユーザーID
+ * @param retentionDays 保存期間（日）。nullの場合は削除しない
+ * @returns 削除された履歴の数と削除された画像のURL配列
+ */
+export async function deleteOldMonitoringHistory(
+  userId: number,
+  retentionDays: number | null
+): Promise<{ deletedCount: number; deletedImageUrls: string[] }> {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  // 保存期間がnull（無制限）の場合は削除しない
+  if (retentionDays === null) {
+    return { deletedCount: 0, deletedImageUrls: [] };
+  }
+
+  // 削除対象の日付を計算（retentionDays日前）
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+
+  // ユーザーが所有するLPとクリエイティブのIDを取得
+  const userLandingPages = await db
+    .select({ id: landingPages.id })
+    .from(landingPages)
+    .where(eq(landingPages.userId, userId));
+  const landingPageIds = userLandingPages.map((lp) => lp.id);
+
+  const userCreatives = await db
+    .select({ id: creatives.id })
+    .from(creatives)
+    .where(eq(creatives.userId, userId));
+  const creativeIds = userCreatives.map((c) => c.id);
+
+  // 削除対象の履歴を取得（画像URLも含む）
+  const conditions = [lt(monitoringHistory.createdAt, cutoffDate)];
+  
+  // LPまたはクリエイティブの条件を追加
+  if (landingPageIds.length > 0 || creativeIds.length > 0) {
+    const targetConditions = [];
+    if (landingPageIds.length > 0) {
+      targetConditions.push(inArray(monitoringHistory.landingPageId, landingPageIds));
+    }
+    if (creativeIds.length > 0) {
+      targetConditions.push(inArray(monitoringHistory.creativeId, creativeIds));
+    }
+    if (targetConditions.length > 0) {
+      conditions.push(or(...targetConditions)!);
+    }
+  } else {
+    // LPもクリエイティブもない場合は削除対象なし
+    return { deletedCount: 0, deletedImageUrls: [] };
+  }
+
+  const oldHistories = await db
+    .select({
+      id: monitoringHistory.id,
+      screenshotUrl: monitoringHistory.screenshotUrl,
+      previousScreenshotUrl: monitoringHistory.previousScreenshotUrl,
+      diffImageUrl: monitoringHistory.diffImageUrl,
+    })
+    .from(monitoringHistory)
+    .where(and(...conditions));
+
+  if (oldHistories.length === 0) {
+    return { deletedCount: 0, deletedImageUrls: [] };
+  }
+
+  // 画像URLを収集（重複を除く）
+  const imageUrls = new Set<string>();
+  for (const history of oldHistories) {
+    if (history.screenshotUrl) imageUrls.add(history.screenshotUrl);
+    if (history.previousScreenshotUrl) imageUrls.add(history.previousScreenshotUrl);
+    if (history.diffImageUrl) imageUrls.add(history.diffImageUrl);
+  }
+
+  // 履歴を削除
+  const historyIds = oldHistories.map((h) => h.id);
+  await db
+    .delete(monitoringHistory)
+    .where(inArray(monitoringHistory.id, historyIds));
+
+  return {
+    deletedCount: oldHistories.length,
+    deletedImageUrls: Array.from(imageUrls),
   };
 }

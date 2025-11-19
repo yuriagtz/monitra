@@ -162,23 +162,26 @@ export async function storageDelete(relKey: string): Promise<void> {
 export function extractStorageKeyFromUrl(url: string): string | null {
   try {
     // Supabase StorageのURLからキーを抽出
-    // 例: https://xxx.supabase.co/storage/v1/object/public/screenshots/screenshots/5/1234567890.png
-    // または: https://xxx.supabase.co/storage/v1/object/public/screenshots/screenshots/5/1234567890_diff.png
+    // 例: https://xxx.supabase.co/storage/v1/object/public/screenshots/screenshots/5/1234567890.jpg
+    // または: https://xxx.supabase.co/storage/v1/object/public/screenshots/screenshots/5/1234567890_diff.jpg
+    // または: https://xxx.supabase.co/storage/v1/object/public/screenshots/creatives/5/1234567890.jpg
     const urlObj = new URL(url);
     const pathParts = urlObj.pathname.split('/');
-    const screenshotsIndex = pathParts.findIndex(part => part === 'screenshots');
     
-    if (screenshotsIndex !== -1 && screenshotsIndex < pathParts.length - 1) {
-      // "screenshots"以降の部分を結合（バケット名の"screenshots"は除外）
-      // 例: /storage/v1/object/public/screenshots/screenshots/5/1234567890.png
-      //     -> screenshots/5/1234567890.png
-      return pathParts.slice(screenshotsIndex + 1).join('/');
+    // "screenshots" または "creatives" バケットを検索
+    const bucketIndex = pathParts.findIndex(part => part === 'screenshots' || part === 'creatives');
+    
+    if (bucketIndex !== -1 && bucketIndex < pathParts.length - 1) {
+      // バケット名以降の部分を結合
+      // 例: /storage/v1/object/public/screenshots/screenshots/5/1234567890.jpg
+      //     -> screenshots/5/1234567890.jpg
+      return pathParts.slice(bucketIndex + 1).join('/');
     }
     
-    // フォールバック: 正規表現で抽出
-    const match = url.match(/\/screenshots\/(.+)$/);
+    // フォールバック: 正規表現で抽出（screenshots または creatives）
+    const match = url.match(/\/(screenshots|creatives)\/(.+)$/);
     if (match) {
-      return match[1];
+      return `${match[1]}/${match[2]}`;
     }
     return null;
   } catch {

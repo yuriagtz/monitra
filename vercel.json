@@ -9,6 +9,7 @@
   },
   "routes": [
     { "src": "/api/cron/schedule-check", "dest": "/api/index" },
+    { "src": "/api/cron/cleanup-history", "dest": "/api/index" },
     { "src": "/api/(.*)", "dest": "/api/index" },
     { "src": "/(.*)", "dest": "/api/index" }
   ],
@@ -16,6 +17,10 @@
     {
       "path": "/api/cron/schedule-check",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-history",
+      "schedule": "0 3 * * *"
     }
   ]
 }

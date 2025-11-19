@@ -1835,6 +1835,16 @@ export const appRouter = router({
         return { success: true };
       }),
   }),
+  
+  // 古い監視履歴の削除（管理者用）
+  cleanup: router({
+    run: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        const { cleanupOldHistoryForAllUsers } = await import("./cleanup");
+        const result = await cleanupOldHistoryForAllUsers();
+        return result;
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

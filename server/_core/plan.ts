@@ -11,6 +11,7 @@ export const PLAN_CONFIG = {
     maxLpCount: 3, // 最大LP登録数
     maxCreativeCount: 10, // 最大クリエイティブ登録数
     maxDailyManualMonitorCount: 10, // 1日の手動監視実行回数制限
+    historyRetentionDays: 30, // 監視履歴の保存期間（日）
   },
   light: {
     name: "ライトプラン",
@@ -18,6 +19,7 @@ export const PLAN_CONFIG = {
     maxLpCount: 15,
     maxCreativeCount: 50,
     maxDailyManualMonitorCount: 50, // 1日の手動監視実行回数制限
+    historyRetentionDays: 90, // 監視履歴の保存期間（日）
   },
   pro: {
     name: "プロプラン",
@@ -25,6 +27,7 @@ export const PLAN_CONFIG = {
     maxLpCount: null, // 無制限
     maxCreativeCount: null, // 無制限
     maxDailyManualMonitorCount: 200, // 1日の手動監視実行回数制限
+    historyRetentionDays: 365, // 監視履歴の保存期間（日）
   },
   admin: {
     name: "管理者プラン",
@@ -32,6 +35,7 @@ export const PLAN_CONFIG = {
     maxLpCount: null, // 無制限
     maxCreativeCount: null, // 無制限
     maxDailyManualMonitorCount: null, // 無制限
+    historyRetentionDays: null, // 無制限（削除しない）
   },
 } as const;
 
@@ -87,5 +91,12 @@ export function getAvailableIntervalOptions(plan: Plan): Array<{ value: number; 
     ...option,
     disabled: option.value < minIntervalDays,
   }));
+}
+
+/**
+ * プランに応じた監視履歴の保存期間（日）を取得
+ */
+export function getHistoryRetentionDays(plan: Plan): number | null {
+  return PLAN_CONFIG[plan].historyRetentionDays ?? null;
 }
 

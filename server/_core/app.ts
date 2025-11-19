@@ -101,6 +101,50 @@ export async function createApp(options: CreateAppOptions = {}) {
     }
   });
 
+  // 古い監視履歴の削除エンドポイント（毎日午前3時に実行）
+  app.get("/api/cron/cleanup-history", async (req, res) => {
+    // Vercel Cron Jobsでキャッシュを無効化
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    
+    const startTime = Date.now();
+    console.log("[Cron] Cleanup history endpoint called");
+
+    // Vercel環境の場合、Vercelが自動的にAuthorizationヘッダーを追加する
+    // 手動実行（開発・テスト用）の場合のみCRON_SECRETで検証
+    if (process.env.CRON_SECRET && !process.env.VERCEL) {
+      const authHeader = req.headers["authorization"];
+      const cronSecret = req.headers["x-cron-secret"] || req.query.secret;
+      const isValid =
+        authHeader === `Bearer ${process.env.CRON_SECRET}` ||
+        cronSecret === process.env.CRON_SECRET;
+
+      if (!isValid) {
+        console.warn("[Cron] Unauthorized request to cleanup-history endpoint");
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+    }
+
+    try {
+      console.log("[Cron] Starting history cleanup...");
+      const { cleanupOldHistoryForAllUsers } = await import("../cleanup");
+      const result = await cleanupOldHistoryForAllUsers();
+      const duration = Date.now() - startTime;
+      console.log(`[Cron] History cleanup completed in ${duration}ms`, result);
+      res.json({ success: true, ...result, duration });
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      console.error("[Cron] Error executing history cleanup:", error);
+      console.error("[Cron] Error stack:", error?.stack);
+      res.status(500).json({ 
+        error: "Internal server error", 
+        message: error?.message,
+        duration 
+      });
+    }
+  });
+
   if (process.env.NODE_ENV === "development" && options.server) {
     const { setupVite } = await import("./vite");
     await setupVite(app, options.server);

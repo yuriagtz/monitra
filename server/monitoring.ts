@@ -5,6 +5,7 @@ import { storagePut, storageGet, storageDelete, extractStorageKeyFromUrl } from 
 import * as db from "./db";
 import { sendNotifications } from "./notification";
 import crypto from "crypto";
+import { compressImageToJpeg, convertKeyToJpeg } from "./imageCompression";
 
 /**
  * Take a screenshot of a URL and return the buffer
@@ -461,23 +462,30 @@ export async function monitorLandingPage(landingPageId: number): Promise<{
       
       // 差分がある場合のみ、Storageに新しいスクリーンショットと差分画像を保存
       const timestamp = Date.now();
-      const fileKey = `screenshots/${landingPageId}/${timestamp}.png`;
+      const pngFileKey = `screenshots/${landingPageId}/${timestamp}.png`;
       
-      // Save new screenshot to Storage
+      // 画像をJPEGに圧縮して保存
+      const compressedScreenshot = await compressImageToJpeg(newScreenshotBuffer, 80);
+      const jpegFileKey = convertKeyToJpeg(pngFileKey);
+      
+      // Save new screenshot to Storage (JPEG)
       const result = await storagePut(
-        fileKey,
-        newScreenshotBuffer,
-        "image/png"
+        jpegFileKey,
+        compressedScreenshot,
+        "image/jpeg"
       );
       newScreenshotUrl = result.url;
       
-      // Save diff image
+      // Save diff image (差分画像も圧縮)
       if (comparison.diffImageBuffer) {
-        const diffFileKey = `screenshots/${landingPageId}/${timestamp}_diff.png`;
+        const diffPngFileKey = `screenshots/${landingPageId}/${timestamp}_diff.png`;
+        const compressedDiffImage = await compressImageToJpeg(comparison.diffImageBuffer, 75); // 差分画像は少し品質を下げる
+        const diffJpegFileKey = convertKeyToJpeg(diffPngFileKey);
+        
         const diffResult = await storagePut(
-          diffFileKey,
-          comparison.diffImageBuffer,
-          "image/png"
+          diffJpegFileKey,
+          compressedDiffImage,
+          "image/jpeg"
         );
         diffImageUrl = diffResult.url;
       }
@@ -488,13 +496,17 @@ export async function monitorLandingPage(landingPageId: number): Promise<{
       // 差分がない場合でも、最新の履歴の場合は画像を保存する
       // 監視実行時は常に最新の履歴として扱う
       const timestamp = Date.now();
-      const fileKey = `screenshots/${landingPageId}/${timestamp}.png`;
+      const pngFileKey = `screenshots/${landingPageId}/${timestamp}.png`;
       
-      // Save new screenshot to Storage (最新の履歴なので保存)
+      // 画像をJPEGに圧縮して保存
+      const compressedScreenshot = await compressImageToJpeg(newScreenshotBuffer, 80);
+      const jpegFileKey = convertKeyToJpeg(pngFileKey);
+      
+      // Save new screenshot to Storage (JPEG, 最新の履歴なので保存)
       const result = await storagePut(
-        fileKey,
-        newScreenshotBuffer,
-        "image/png"
+        jpegFileKey,
+        compressedScreenshot,
+        "image/jpeg"
       );
       newScreenshotUrl = result.url;
       // 差分がない場合は、screenshotsテーブルへの更新は不要
@@ -503,13 +515,17 @@ export async function monitorLandingPage(landingPageId: number): Promise<{
     // 初回実行の場合は、変更なしとして保存（クリエイティブと統一）
     contentChanged = false;
     const timestamp = Date.now();
-    const fileKey = `screenshots/${landingPageId}/${timestamp}.png`;
+    const pngFileKey = `screenshots/${landingPageId}/${timestamp}.png`;
     
-    // Save new screenshot to Storage
+    // 画像をJPEGに圧縮して保存
+    const compressedScreenshot = await compressImageToJpeg(newScreenshotBuffer, 80);
+    const jpegFileKey = convertKeyToJpeg(pngFileKey);
+    
+    // Save new screenshot to Storage (JPEG)
     const result = await storagePut(
-      fileKey,
-      newScreenshotBuffer,
-      "image/png"
+      jpegFileKey,
+      compressedScreenshot,
+      "image/jpeg"
     );
     newScreenshotUrl = result.url;
     
@@ -819,13 +835,17 @@ export async function monitorCreative(creativeId: number): Promise<{
       
       // 差分がある場合のみ、Storageに新しい画像を保存
       const timestamp = Date.now();
-      const fileKey = `creatives/${creativeId}/${timestamp}.png`;
+      const pngFileKey = `creatives/${creativeId}/${timestamp}.png`;
       
-      // Save new image to Storage
+      // 画像をJPEGに圧縮して保存
+      const compressedImage = await compressImageToJpeg(imageBuffer, 80);
+      const jpegFileKey = convertKeyToJpeg(pngFileKey);
+      
+      // Save new image to Storage (JPEG)
       const result = await storagePut(
-        fileKey,
-        imageBuffer,
-        "image/png"
+        jpegFileKey,
+        compressedImage,
+        "image/jpeg"
       );
       newImageUrl = result.url;
       
@@ -838,13 +858,17 @@ export async function monitorCreative(creativeId: number): Promise<{
       // 差分がない場合でも、最新の履歴の場合は画像を保存する
       // 監視実行時は常に最新の履歴として扱う
       const timestamp = Date.now();
-      const fileKey = `creatives/${creativeId}/${timestamp}.png`;
+      const pngFileKey = `creatives/${creativeId}/${timestamp}.png`;
       
-      // Save new image to Storage (最新の履歴なので保存)
+      // 画像をJPEGに圧縮して保存
+      const compressedImage = await compressImageToJpeg(imageBuffer, 80);
+      const jpegFileKey = convertKeyToJpeg(pngFileKey);
+      
+      // Save new image to Storage (JPEG, 最新の履歴なので保存)
       const result = await storagePut(
-        fileKey,
-        imageBuffer,
-        "image/png"
+        jpegFileKey,
+        compressedImage,
+        "image/jpeg"
       );
       newImageUrl = result.url;
     }
@@ -853,13 +877,17 @@ export async function monitorCreative(creativeId: number): Promise<{
     contentChanged = false;
     message = "初回取得（基準画像を登録しました）";
     const timestamp = Date.now();
-    const fileKey = `creatives/${creativeId}/${timestamp}.png`;
+    const pngFileKey = `creatives/${creativeId}/${timestamp}.png`;
     
-    // Save new image to Storage
+    // 画像をJPEGに圧縮して保存
+    const compressedImage = await compressImageToJpeg(imageBuffer, 80);
+    const jpegFileKey = convertKeyToJpeg(pngFileKey);
+    
+    // Save new image to Storage (JPEG)
     const result = await storagePut(
-      fileKey,
-      imageBuffer,
-      "image/png"
+      jpegFileKey,
+      compressedImage,
+      "image/jpeg"
     );
     newImageUrl = result.url;
     
