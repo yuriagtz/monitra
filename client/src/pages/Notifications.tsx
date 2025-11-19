@@ -200,9 +200,7 @@ export default function Notifications() {
                 size="sm"
                 onClick={() => handleTest("email")}
                 disabled={
-                  !formData.emailAddress ||
-                  testNotification.isPending ||
-                  hasEmailChanges
+                  !formData.emailAddress || testNotification.isPending
                 }
                 className="bg-white"
               >
