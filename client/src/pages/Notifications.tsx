@@ -53,11 +53,11 @@ export default function Notifications() {
       const next = {
         emailEnabled: !!settings.emailEnabled,
         emailAddress: settings.emailAddress || "",
-        slackEnabled: !!settings.slackEnabled,
+        slackEnabled: isFreePlan ? false : !!settings.slackEnabled,
         slackWebhookUrl: settings.slackWebhookUrl || "",
-        discordEnabled: !!settings.discordEnabled,
+        discordEnabled: isFreePlan ? false : !!settings.discordEnabled,
         discordWebhookUrl: settings.discordWebhookUrl || "",
-        chatworkEnabled: !!settings.chatworkEnabled,
+        chatworkEnabled: isFreePlan ? false : !!settings.chatworkEnabled,
         chatworkApiToken: settings.chatworkApiToken || "",
         chatworkRoomId: settings.chatworkRoomId || "",
         notifyOnChange: !!settings.notifyOnChange,
@@ -68,7 +68,7 @@ export default function Notifications() {
       setFormData(next);
       setSavedData(next);
     }
-  }, [settings]);
+  }, [settings, isFreePlan]);
 
   const handleSave = async () => {
     try {

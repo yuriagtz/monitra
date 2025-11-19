@@ -896,7 +896,31 @@ export const appRouter = router({
   notifications: router({
     getSettings: protectedProcedure.query(async ({ ctx }) => {
       const settings = await db.getNotificationSettings(ctx.user.id);
-      return settings || null;
+      if (!settings) return null;
+      
+      // フリープランの場合、Slack/Discord/Chatwork通知を強制的に無効化
+      const userPlan = (ctx.user.plan as "free" | "light" | "pro" | "admin") || "free";
+      if (userPlan === "free") {
+        // 既に有効になっている場合は無効化してデータベースに保存
+        const needsUpdate = settings.slackEnabled || settings.discordEnabled || settings.chatworkEnabled;
+        if (needsUpdate) {
+          await db.upsertNotificationSettings(ctx.user.id, {
+            slackEnabled: false,
+            discordEnabled: false,
+            chatworkEnabled: false,
+          });
+        }
+        
+        // 返り値も無効化された状態で返す
+        return {
+          ...settings,
+          slackEnabled: false,
+          discordEnabled: false,
+          chatworkEnabled: false,
+        };
+      }
+      
+      return settings;
     }),
     
     updateSettings: protectedProcedure
