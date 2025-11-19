@@ -2,6 +2,7 @@ import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "./db";
 import { getDb } from "./db";
@@ -1845,6 +1846,15 @@ export const appRouter = router({
         filename: z.string(),
       }))
       .mutation(async ({ ctx, input }) => {
+        // フリープランではエクスポート機能を制限
+        const userPlan = (ctx.user.plan as "free" | "light" | "pro" | "admin") || "free";
+        if (userPlan === "free") {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "データエクスポート機能はライトプラン以上でご利用いただけます。",
+          });
+        }
+        
         await db.addExportHistoryEntry({
           userId: ctx.user.id,
           type: input.type,

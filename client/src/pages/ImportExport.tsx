@@ -1,11 +1,13 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { trpc } from "@/lib/trpc";
 import { Download, FileDown } from "lucide-react";
 import { toast } from "sonner";
 
 export default function ImportExport() {
   const utils = trpc.useUtils();
+  const { data: user } = trpc.auth.me.useQuery();
   const { data: landingPages } = trpc.landingPages.list.useQuery();
   const { data: creatives } = trpc.creatives.list.useQuery();
   const { data: histories } = trpc.monitoring.recent.useQuery({ limit: 1000 });
@@ -16,9 +18,20 @@ export default function ImportExport() {
   );
   const recordExport = trpc.importExport.recordExport.useMutation({
     onSuccess: () => utils.importExport.getHistory.invalidate(),
+    onError: (error) => {
+      toast.error(error.message || "エクスポートに失敗しました");
+    },
   });
   
+  // フリープランかどうかを判定
+  const isFreePlan = (user?.plan as "free" | "light" | "pro" | "admin") === "free";
+  
   const handleExportLps = async () => {
+    if (isFreePlan) {
+      toast.error("データエクスポート機能はライトプラン以上でご利用いただけます。");
+      return;
+    }
+    
     if (!landingPages || landingPages.length === 0) {
       toast.error('エクスポートするLPがありません');
       return;
@@ -41,6 +54,11 @@ export default function ImportExport() {
   };
   
   const handleExportHistories = async () => {
+    if (isFreePlan) {
+      toast.error("データエクスポート機能はライトプラン以上でご利用いただけます。");
+      return;
+    }
+    
     if (!histories || histories.length === 0) {
       toast.error('エクスポートする履歴がありません');
       return;
@@ -65,6 +83,11 @@ export default function ImportExport() {
   };
   
   const handleExportCreatives = async () => {
+    if (isFreePlan) {
+      toast.error("データエクスポート機能はライトプラン以上でご利用いただけます。");
+      return;
+    }
+    
     if (!creatives || creatives.length === 0) {
       toast.error('エクスポートするクリエイティブがありません');
       return;
@@ -89,6 +112,11 @@ export default function ImportExport() {
   };
   
   const handleExportCreativeHistories = async () => {
+    if (isFreePlan) {
+      toast.error("データエクスポート機能はライトプラン以上でご利用いただけます。");
+      return;
+    }
+    
     if (!creativeHistories || creativeHistories.length === 0) {
       toast.error('エクスポートする履歴がありません');
       return;
@@ -142,12 +170,28 @@ export default function ImportExport() {
                   <p className="font-medium">LPリスト (CSV)</p>
                   <p className="text-sm text-muted-foreground">
                     登録されている全LPをCSV形式でエクスポート
+                    {isFreePlan && (
+                      <span className="block mt-1 text-amber-600">
+                        ※ ライトプラン以上でご利用いただけます
+                      </span>
+                    )}
                   </p>
                 </div>
-                <Button onClick={handleExportLps}>
-                  <FileDown className="w-4 h-4 mr-2" />
-                  エクスポート
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button onClick={handleExportLps} disabled={isFreePlan}>
+                        <FileDown className="w-4 h-4 mr-2" />
+                        エクスポート
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {isFreePlan && (
+                    <TooltipContent>
+                      <p>データエクスポート機能はライトプラン以上でご利用いただけます</p>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
               </div>
 
               <div className="flex items-center justify-between p-4 border rounded-lg">
@@ -155,12 +199,28 @@ export default function ImportExport() {
                   <p className="font-medium">LP監視履歴 (CSV)</p>
                   <p className="text-sm text-muted-foreground">
                     全てのLP監視履歴をCSV形式でエクスポート
+                    {isFreePlan && (
+                      <span className="block mt-1 text-amber-600">
+                        ※ ライトプラン以上でご利用いただけます
+                      </span>
+                    )}
                   </p>
                 </div>
-                <Button onClick={handleExportHistories}>
-                  <FileDown className="w-4 h-4 mr-2" />
-                  エクスポート
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button onClick={handleExportHistories} disabled={isFreePlan}>
+                        <FileDown className="w-4 h-4 mr-2" />
+                        エクスポート
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {isFreePlan && (
+                    <TooltipContent>
+                      <p>データエクスポート機能はライトプラン以上でご利用いただけます</p>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
               </div>
             </div>
           </div>
@@ -174,12 +234,28 @@ export default function ImportExport() {
                   <p className="font-medium">クリエイティブリスト (CSV)</p>
                   <p className="text-sm text-muted-foreground">
                     登録されている全クリエイティブをCSV形式でエクスポート
+                    {isFreePlan && (
+                      <span className="block mt-1 text-amber-600">
+                        ※ ライトプラン以上でご利用いただけます
+                      </span>
+                    )}
                   </p>
                 </div>
-                <Button onClick={handleExportCreatives}>
-                  <FileDown className="w-4 h-4 mr-2" />
-                  エクスポート
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button onClick={handleExportCreatives} disabled={isFreePlan}>
+                        <FileDown className="w-4 h-4 mr-2" />
+                        エクスポート
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {isFreePlan && (
+                    <TooltipContent>
+                      <p>データエクスポート機能はライトプラン以上でご利用いただけます</p>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
               </div>
 
               <div className="flex items-center justify-between p-4 border rounded-lg">
@@ -187,12 +263,28 @@ export default function ImportExport() {
                   <p className="font-medium">クリエイティブ監視履歴 (CSV)</p>
                   <p className="text-sm text-muted-foreground">
                     全てのクリエイティブ監視履歴をCSV形式でエクスポート
+                    {isFreePlan && (
+                      <span className="block mt-1 text-amber-600">
+                        ※ ライトプラン以上でご利用いただけます
+                      </span>
+                    )}
                   </p>
                 </div>
-                <Button onClick={handleExportCreativeHistories}>
-                  <FileDown className="w-4 h-4 mr-2" />
-                  エクスポート
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button onClick={handleExportCreativeHistories} disabled={isFreePlan}>
+                        <FileDown className="w-4 h-4 mr-2" />
+                        エクスポート
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {isFreePlan && (
+                    <TooltipContent>
+                      <p>データエクスポート機能はライトプラン以上でご利用いただけます</p>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
               </div>
             </div>
           </div>
