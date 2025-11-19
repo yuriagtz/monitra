@@ -61,9 +61,28 @@ export default function LandingPages() {
   });
   
   const userPlan = (user?.plan as "free" | "light" | "pro" | "admin") || "free";
-  const maxLpCount = PLAN_CONFIG[userPlan].maxLpCount;
+  const planInfo = PLAN_CONFIG[userPlan];
+  const maxLpCount = planInfo.maxLpCount;
   const currentLpCount = landingPages?.length || 0;
   const isAtLimit = maxLpCount !== null && currentLpCount >= maxLpCount;
+
+  // クリエイティブ情報も取得（プラン設定一覧表示用）
+  const { data: creatives } = trpc.creatives.list.useQuery(undefined, {
+    staleTime: 1000 * 60 * 10,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+  });
+
+  const totalCreatives = creatives?.length || 0;
+  const lpUsagePercent = planInfo.maxLpCount === null 
+    ? 0 
+    : Math.round((currentLpCount / planInfo.maxLpCount) * 100);
+  const creativeUsagePercent = planInfo.maxCreativeCount === null
+    ? 0
+    : Math.round((totalCreatives / planInfo.maxCreativeCount) * 100);
+  
+  const lpIsOverLimit = planInfo.maxLpCount !== null && currentLpCount > planInfo.maxLpCount;
+  const creativeIsOverLimit = planInfo.maxCreativeCount !== null && totalCreatives > planInfo.maxCreativeCount;
   
   const { data: allTags } = trpc.tags.list.useQuery(undefined, {
     // タグリストも10分間キャッシュ
