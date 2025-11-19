@@ -960,10 +960,16 @@ export const appRouter = router({
           }
         }
         
+        // メールアドレスのバリデーション（空文字列の場合はnullに変換）
+        let emailAddress = input.emailAddress;
+        if (emailAddress !== undefined && emailAddress.trim() === "") {
+          emailAddress = null;
+        }
+        
         // Drizzleのbooleanカラムにそのままbooleanを渡す
         const dbInput: any = {};
         if (input.emailEnabled !== undefined) dbInput.emailEnabled = input.emailEnabled;
-        if (input.emailAddress !== undefined) dbInput.emailAddress = input.emailAddress;
+        if (input.emailAddress !== undefined) dbInput.emailAddress = emailAddress;
         if (input.slackEnabled !== undefined) dbInput.slackEnabled = input.slackEnabled;
         if (input.slackWebhookUrl !== undefined) dbInput.slackWebhookUrl = input.slackWebhookUrl;
         if (input.discordEnabled !== undefined) dbInput.discordEnabled = input.discordEnabled;
@@ -976,8 +982,16 @@ export const appRouter = router({
         if (input.notifyOnBrokenLink !== undefined) dbInput.notifyOnBrokenLink = input.notifyOnBrokenLink;
         if (input.ignoreFirstViewOnly !== undefined) dbInput.ignoreFirstViewOnly = input.ignoreFirstViewOnly;
         
-        await db.upsertNotificationSettings(ctx.user.id, dbInput);
-        return { success: true };
+        try {
+          await db.upsertNotificationSettings(ctx.user.id, dbInput);
+          return { success: true };
+        } catch (error: any) {
+          console.error("[Notifications] Failed to update settings:", error);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: error.message || "通知設定の保存に失敗しました。",
+          });
+        }
       }),
     
     testNotification: protectedProcedure

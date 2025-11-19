@@ -78,8 +78,10 @@ export default function Notifications() {
       // 全体を保存したので、savedData も現在のフォーム状態で更新
       setSavedData(payload);
       refetch();
-    } catch (error) {
-      toast.error("保存に失敗しました");
+    } catch (error: any) {
+      // エラーはmutationのonErrorで処理されるが、念のためここでもログを出力
+      console.error("保存エラー:", error);
+      // onErrorで既にエラーが表示されているので、ここでは何もしない
     }
   };
 

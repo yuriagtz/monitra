@@ -450,19 +450,24 @@ export async function getNotificationSettings(userId: number): Promise<Notificat
 
 export async function upsertNotificationSettings(userId: number, settings: Partial<InsertNotificationSetting>): Promise<void> {
   const db = await getDb();
-  if (!db) return;
+  if (!db) throw new Error("Database not available");
   
   const existing = await getNotificationSettings(userId);
   
-  if (existing) {
-    await db.update(notificationSettings)
-      .set({ ...settings, updatedAt: new Date() })
-      .where(eq(notificationSettings.userId, userId));
-  } else {
-    await db.insert(notificationSettings).values({
-      userId,
-      ...settings,
-    } as InsertNotificationSetting);
+  try {
+    if (existing) {
+      await db.update(notificationSettings)
+        .set({ ...settings, updatedAt: new Date() })
+        .where(eq(notificationSettings.userId, userId));
+    } else {
+      await db.insert(notificationSettings).values({
+        userId,
+        ...settings,
+      } as InsertNotificationSetting);
+    }
+  } catch (error: any) {
+    console.error("[Database] Failed to upsert notification settings:", error);
+    throw new Error(`通知設定の保存に失敗しました: ${error.message || String(error)}`);
   }
 }
 
