@@ -29,7 +29,7 @@ export default function Landing() {
               ログイン
             </Button>
             <Button onClick={() => setLocation("/register")}>
-              無料で始める
+              今すぐ始める
             </Button>
           </div>
         </div>
@@ -46,7 +46,7 @@ export default function Landing() {
             </span>
           </h1>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            登録したランディングページとクリエイティブの「変化」「有効性」を自動検知。
+            登録したLPとクリエイティブの「変化」「有効性」を自動検知。
             <br />
             もう"開いて確認する"必要はありません。
             <br />
@@ -54,10 +54,10 @@ export default function Landing() {
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
             <Button size="lg" className="text-lg px-8 py-6" onClick={() => setLocation("/register")}>
-              今すぐ無料で始める
+              今すぐ始める
             </Button>
           </div>
-          <p className="text-sm text-gray-500">クレジットカード不要 • 無料プランあり</p>
+          <p className="text-sm text-gray-500">無料プランからご利用いただけます</p>
         </div>
       </section>
 
@@ -68,7 +68,7 @@ export default function Landing() {
             24時間、あなたのLPとクリエイティブを見守ります
           </h2>
           <p className="text-lg text-gray-600">
-            Monitraが自動で監視・分析・通知。LPとバナー広告の変更を手動チェックから解放されます。
+            Monitraが自動で監視・分析・通知。LPとクリエイティブの変更を手動チェックから解放されます。
           </p>
         </div>
         <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
@@ -150,7 +150,7 @@ export default function Landing() {
       <section className="container mx-auto px-4 py-20 bg-gray-50">
         <div className="text-center mb-12">
           <h2 className="text-3xl md:text-4xl font-bold mb-4">シンプルな料金プラン</h2>
-          <p className="text-lg text-gray-600">まずはフリープランでお試しください</p>
+          <p className="text-lg text-gray-600">用途に合わせて最適なプランを選択できます</p>
         </div>
         <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
           {/* Free Plan */}
@@ -184,7 +184,7 @@ export default function Landing() {
                 </li>
               </ul>
               <Button className="w-full mt-6" variant="outline" onClick={() => setLocation("/register")}>
-                無料で始める
+                今すぐ始める
               </Button>
             </CardContent>
           </Card>
@@ -470,10 +470,10 @@ export default function Landing() {
             今すぐMonitraで、LPとクリエイティブの管理を自動化しましょう
           </h2>
           <p className="text-lg text-gray-600">
-            無料プランで今日から始められます。クレジットカード不要。
+            無料プランからご利用いただけます。クレジットカード登録不要。
           </p>
           <Button size="lg" className="text-lg px-8 py-6" onClick={() => setLocation("/register")}>
-            無料で始める
+            今すぐ始める
           </Button>
         </div>
       </section>
