@@ -11,14 +11,14 @@ export const PLAN_CONFIG = {
     minIntervalDays: 14, // 最小14日に1回
     maxLpCount: 3, // 最大LP登録数
     maxCreativeCount: 10, // 最大クリエイティブ登録数
-    maxDailyManualMonitorCount: 10, // 1日の手動監視実行回数制限
+    maxDailyManualMonitorCount: 5, // 1日の手動監視実行回数制限
     historyRetentionDays: 30, // 監視履歴の保存期間（日）
   },
   light: {
     name: "ライトプラン",
     minIntervalDays: 7, // 最小7日に1回
-    maxLpCount: 15, // 最大LP登録数
-    maxCreativeCount: 50, // 最大クリエイティブ登録数
+    maxLpCount: 10, // 最大LP登録数
+    maxCreativeCount: 30, // 最大クリエイティブ登録数
     maxDailyManualMonitorCount: 50, // 1日の手動監視実行回数制限
     historyRetentionDays: 90, // 監視履歴の保存期間（日）
   },
@@ -26,7 +26,7 @@ export const PLAN_CONFIG = {
     name: "プロプラン",
     minIntervalDays: 3, // 最小3日に1回
     maxLpCount: 100, // 最大LP登録数
-    maxCreativeCount: 500, // 最大クリエイティブ登録数
+    maxCreativeCount: 300, // 最大クリエイティブ登録数
     maxDailyManualMonitorCount: 200, // 1日の手動監視実行回数制限
     historyRetentionDays: 365, // 監視履歴の保存期間（日）
   },
