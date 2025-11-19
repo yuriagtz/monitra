@@ -36,7 +36,7 @@ export default function Landing() {
       <section className="container mx-auto px-4 py-20 text-center">
         <div className="max-w-4xl mx-auto space-y-6">
           <h1 className="text-5xl md:text-6xl font-bold leading-tight">
-            変化を逃さない、
+            変化を逃さない
             <br />
             <span className="bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">
               LP分析の自動監視AI
@@ -154,7 +154,7 @@ export default function Landing() {
           <Card className="border-2">
             <CardHeader>
               <CardTitle className="text-2xl">フリープラン</CardTitle>
-              <div className="text-4xl font-bold mt-4">¥0</div>
+              <div className="text-4xl font-bold mt-4">無料</div>
               <CardDescription className="text-base mt-2">個人利用・お試しに最適</CardDescription>
             </CardHeader>
             <CardContent>
@@ -287,7 +287,7 @@ export default function Landing() {
               {/* 月額料金 */}
               <TableRow>
                 <TableCell className="font-medium">月額料金</TableCell>
-                <TableCell className="text-center">¥0</TableCell>
+                <TableCell className="text-center">無料</TableCell>
                 <TableCell className="text-center">¥980/月</TableCell>
                 <TableCell className="text-center">¥2,980/月</TableCell>
               </TableRow>
