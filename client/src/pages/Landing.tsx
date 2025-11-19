@@ -204,11 +204,15 @@ export default function Landing() {
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
-                  <span>メール通知</span>
+                  <span>メール・Slack・Webhook通知</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
                   <span>90日間の履歴保存</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-5 h-5 text-green-600" />
+                  <span>データエクスポート（CSV）</span>
                 </li>
               </ul>
               <Button className="w-full mt-6" variant="outline" onClick={() => setLocation("/register")}>
@@ -242,19 +246,15 @@ export default function Landing() {
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
-                  <span>メール・Slack・Webhook通知</span>
+                  <span>メール・Slack・Webhook・Chatwork通知</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
-                  <span>無制限の履歴保存</span>
+                  <span>365日間の履歴保存</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
-                  <span>PDFレポート生成</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-5 h-5 text-green-600" />
-                  <span>優先サポート</span>
+                  <span>データエクスポート（CSV）</span>
                 </li>
               </ul>
               <Button className="w-full mt-6" onClick={() => setLocation("/register")}>
@@ -270,14 +270,14 @@ export default function Landing() {
         <div className="text-center mb-12">
           <h2 className="text-3xl md:text-4xl font-bold mb-4">プラン詳細比較</h2>
           <p className="text-lg text-gray-600">
-            各プランの機能と制限を詳しく比較できます
+            各プランの機能を詳しく比較できます
           </p>
         </div>
         <div className="max-w-6xl mx-auto overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="min-w-[200px]">機能・制限</TableHead>
+                <TableHead className="min-w-[200px]">機能</TableHead>
                 <TableHead className="text-center">フリープラン</TableHead>
                 <TableHead className="text-center">ライトプラン</TableHead>
                 <TableHead className="text-center">プロプラン</TableHead>
@@ -292,41 +292,33 @@ export default function Landing() {
                 <TableCell className="text-center">¥2,980/月</TableCell>
               </TableRow>
               
-              {/* 無料お試し期間 */}
+              {/* 自動での変更チェック間隔 */}
               <TableRow>
-                <TableCell className="font-medium">無料お試し期間</TableCell>
-                <TableCell className="text-center">-</TableCell>
-                <TableCell className="text-center">-</TableCell>
-                <TableCell className="text-center">30日間</TableCell>
-              </TableRow>
-              
-              {/* 最小監視間隔 */}
-              <TableRow>
-                <TableCell className="font-medium">最小監視間隔</TableCell>
+                <TableCell className="font-medium">自動での変更チェック間隔</TableCell>
                 <TableCell className="text-center">{PLAN_CONFIG.free.minIntervalDays}日ごと</TableCell>
                 <TableCell className="text-center">{PLAN_CONFIG.light.minIntervalDays}日ごと</TableCell>
                 <TableCell className="text-center">{PLAN_CONFIG.pro.minIntervalDays}日ごと</TableCell>
               </TableRow>
               
-              {/* 最大LP登録数 */}
+              {/* 監視可能なLP数 */}
               <TableRow>
-                <TableCell className="font-medium">最大LP登録数</TableCell>
+                <TableCell className="font-medium">監視可能なLP数</TableCell>
                 <TableCell className="text-center">{PLAN_CONFIG.free.maxLpCount}ページ</TableCell>
                 <TableCell className="text-center">{PLAN_CONFIG.light.maxLpCount}ページ</TableCell>
                 <TableCell className="text-center">{PLAN_CONFIG.pro.maxLpCount}ページ</TableCell>
               </TableRow>
               
-              {/* 最大クリエイティブ登録数 */}
+              {/* 監視可能なクリエイティブ数 */}
               <TableRow>
-                <TableCell className="font-medium">最大クリエイティブ登録数</TableCell>
+                <TableCell className="font-medium">監視可能なクリエイティブ数</TableCell>
                 <TableCell className="text-center">{PLAN_CONFIG.free.maxCreativeCount}件</TableCell>
                 <TableCell className="text-center">{PLAN_CONFIG.light.maxCreativeCount}件</TableCell>
                 <TableCell className="text-center">{PLAN_CONFIG.pro.maxCreativeCount}件</TableCell>
               </TableRow>
               
-              {/* 1日の手動監視実行回数制限 */}
+              {/* 手動での監視実行回数（1日あたり） */}
               <TableRow>
-                <TableCell className="font-medium">1日の手動監視実行回数制限</TableCell>
+                <TableCell className="font-medium">手動での監視実行回数（1日あたり）</TableCell>
                 <TableCell className="text-center">{PLAN_CONFIG.free.maxDailyManualMonitorCount}回</TableCell>
                 <TableCell className="text-center">{PLAN_CONFIG.light.maxDailyManualMonitorCount}回</TableCell>
                 <TableCell className="text-center">{PLAN_CONFIG.pro.maxDailyManualMonitorCount}回</TableCell>
@@ -357,20 +349,6 @@ export default function Landing() {
               {/* リンク切れチェック */}
               <TableRow>
                 <TableCell className="font-medium">リンク切れチェック</TableCell>
-                <TableCell className="text-center">
-                  <Check className="w-5 h-5 text-green-600 mx-auto" />
-                </TableCell>
-                <TableCell className="text-center">
-                  <Check className="w-5 h-5 text-green-600 mx-auto" />
-                </TableCell>
-                <TableCell className="text-center">
-                  <Check className="w-5 h-5 text-green-600 mx-auto" />
-                </TableCell>
-              </TableRow>
-              
-              {/* クリエイティブ監視 */}
-              <TableRow>
-                <TableCell className="font-medium">クリエイティブ監視</TableCell>
                 <TableCell className="text-center">
                   <Check className="w-5 h-5 text-green-600 mx-auto" />
                 </TableCell>
@@ -470,38 +448,10 @@ export default function Landing() {
               <TableRow>
                 <TableCell className="font-medium">データエクスポート（CSV）</TableCell>
                 <TableCell className="text-center">
-                  <Check className="w-5 h-5 text-green-600 mx-auto" />
-                </TableCell>
-                <TableCell className="text-center">
-                  <Check className="w-5 h-5 text-green-600 mx-auto" />
-                </TableCell>
-                <TableCell className="text-center">
-                  <Check className="w-5 h-5 text-green-600 mx-auto" />
-                </TableCell>
-              </TableRow>
-              
-              {/* PDFレポート生成 */}
-              <TableRow>
-                <TableCell className="font-medium">PDFレポート生成</TableCell>
-                <TableCell className="text-center">
-                  <X className="w-5 h-5 text-gray-400 mx-auto" />
-                </TableCell>
-                <TableCell className="text-center">
                   <X className="w-5 h-5 text-gray-400 mx-auto" />
                 </TableCell>
                 <TableCell className="text-center">
                   <Check className="w-5 h-5 text-green-600 mx-auto" />
-                </TableCell>
-              </TableRow>
-              
-              {/* 優先サポート */}
-              <TableRow>
-                <TableCell className="font-medium">優先サポート</TableCell>
-                <TableCell className="text-center">
-                  <X className="w-5 h-5 text-gray-400 mx-auto" />
-                </TableCell>
-                <TableCell className="text-center">
-                  <X className="w-5 h-5 text-gray-400 mx-auto" />
                 </TableCell>
                 <TableCell className="text-center">
                   <Check className="w-5 h-5 text-green-600 mx-auto" />
