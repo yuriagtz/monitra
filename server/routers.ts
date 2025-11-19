@@ -1396,10 +1396,17 @@ export const appRouter = router({
         
         const now = new Date();
         const newExecuteHour = input.executeHour ?? existingSchedule?.executeHour ?? 9;
+        // nextRunAtを更新すべき条件：
+        // 1. スケジュールが存在しない（新規作成）
+        // 2. nextRunAtが設定されていない
+        // 3. 監視間隔が変更された（入力値または自動調整後の値が既存値と異なる）
+        // 4. 実行時間が変更された
+        // 5. 自動調整された場合（adjustedIntervalDays !== input.intervalDays）
         const shouldUpdateNextRunAt = !existingSchedule || 
                                        !existingSchedule.nextRunAt || 
                                        existingSchedule.intervalDays !== adjustedIntervalDays ||
-                                       (existingSchedule?.executeHour ?? 9) !== newExecuteHour;
+                                       (existingSchedule?.executeHour ?? 9) !== newExecuteHour ||
+                                       adjustedIntervalDays !== input.intervalDays; // 自動調整された場合も更新
         
         if (shouldUpdateNextRunAt) {
           // 最終実行日を確認
@@ -1407,6 +1414,7 @@ export const appRouter = router({
           
           // タイムゾーンを考慮してnextRunAtを計算（executeHourは日本時間として解釈）
           nextRunAt = calculateNextRunAt(newExecuteHour, now, adjustedIntervalDays, lastRunAt);
+          console.log(`[Scheduler] Calculating nextRunAt: executeHour=${newExecuteHour}, intervalDays=${adjustedIntervalDays}, lastRunAt=${lastRunAt?.toISOString() || 'null'}, nextRunAt=${nextRunAt.toISOString()}`);
         }
         
         const id = await db.upsertScheduleSettings(ctx.user.id, {
@@ -1420,11 +1428,13 @@ export const appRouter = router({
         // Import scheduler dynamically to avoid circular dependency
         const { startSchedule } = await import('./scheduler');
         // 有効な場合はスケジュールを開始（既存のスケジュールも再起動）
+        // 注意: startScheduleはnextRunAtが既に設定されている場合は上書きしない
         if (isEnabled) {
           await startSchedule(id);
         }
         
-        // 更新後のスケジュールを取得して返す
+        // 更新後のスケジュールを取得して返す（startSchedule後の最新値を取得）
+        await new Promise(resolve => setTimeout(resolve, 100)); // 少し待ってから取得
         const updatedSchedule = await db.getScheduleSettingsByUserId(ctx.user.id);
         
         return { 
