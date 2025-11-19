@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Check, Eye, Bell, BarChart3, Clock, Shield, X } from "lucide-react";
+import { Check, Eye, Bell, BarChart3, Clock, Shield, X, Image } from "lucide-react";
 import { useLocation } from "wouter";
 import { PLAN_CONFIG } from "@/_core/plan";
 import { APP_LOGO } from "@/const";
@@ -20,7 +20,7 @@ export default function Landing() {
               alt="Monitra"
               className="h-8 w-auto object-contain"
             />
-            <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">
+            <span className="text-xl font-bold">
               Monitra
             </span>
           </div>
@@ -65,10 +65,10 @@ export default function Landing() {
       <section className="container mx-auto px-4 py-20">
         <div className="text-center mb-12">
           <h2 className="text-3xl md:text-4xl font-bold mb-4">
-            24時間、あなたのLPを見守ります
+            24時間、あなたのLPとクリエイティブを見守ります
           </h2>
           <p className="text-lg text-gray-600">
-            Monitraが自動で監視・分析・通知。手動チェックから解放されます。
+            Monitraが自動で監視・分析・通知。LPとバナー広告の変更を手動チェックから解放されます。
           </p>
         </div>
         <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
@@ -79,7 +79,7 @@ export default function Landing() {
               </div>
               <CardTitle>自動変更検知</CardTitle>
               <CardDescription>
-                ファーストビュー、全体レイアウト、リンク切れを自動で監視。変更があれば即座に通知します。
+                LPのファーストビュー、全体レイアウト、リンク切れ、クリエイティブ（バナー広告）の画像変更を自動で監視。変更があれば即座に通知します。
               </CardDescription>
             </CardHeader>
           </Card>
@@ -91,7 +91,7 @@ export default function Landing() {
               </div>
               <CardTitle>詳細分析レポート</CardTitle>
               <CardDescription>
-                変更履歴、トレンド、統計データを自動集計。グラフや表で視覚的に確認できます。
+                LPとクリエイティブの変更履歴、トレンド、統計データを自動集計。グラフや表で視覚的に確認できます。
               </CardDescription>
             </CardHeader>
           </Card>
@@ -103,7 +103,7 @@ export default function Landing() {
               </div>
               <CardTitle>リアルタイム通知</CardTitle>
               <CardDescription>
-                重要な変更やエラーを検知したら、メール・Slack・Webhookで即座にお知らせします。
+                重要な変更やエラーを検知したら、メール・Slack・Webhook・Chatworkで即座にお知らせします。
               </CardDescription>
             </CardHeader>
           </Card>
@@ -115,7 +115,7 @@ export default function Landing() {
               </div>
               <CardTitle>柔軟なスケジュール</CardTitle>
               <CardDescription>
-                監視頻度を自由に設定。1時間ごと、毎日、週次など、ニーズに合わせてカスタマイズ可能。
+                LPとクリエイティブそれぞれに監視頻度を自由に設定。プランに応じた最小間隔で、毎日、週次など、ニーズに合わせてカスタマイズ可能。
               </CardDescription>
             </CardHeader>
           </Card>
@@ -139,7 +139,31 @@ export default function Landing() {
               </div>
               <CardTitle>履歴管理</CardTitle>
               <CardDescription>
-                過去の変更履歴を無制限に保存。いつでも過去の状態と比較・確認できます。
+                LPとクリエイティブの過去の変更履歴を保存。プランに応じた保存期間で、いつでも過去の状態と比較・確認できます。
+              </CardDescription>
+            </CardHeader>
+          </Card>
+
+          <Card className="border-2 hover:border-blue-400 transition-colors">
+            <CardHeader>
+              <div className="w-12 h-12 bg-cyan-100 rounded-lg flex items-center justify-center mb-4">
+                <Image className="w-6 h-6 text-cyan-600" />
+              </div>
+              <CardTitle>クリエイティブ監視</CardTitle>
+              <CardDescription>
+                バナー広告の画像を監視。画像の変更や取得エラーを自動検知し、変更があれば即座に通知します。
+              </CardDescription>
+            </CardHeader>
+          </Card>
+
+          <Card className="border-2 hover:border-blue-400 transition-colors">
+            <CardHeader>
+              <div className="w-12 h-12 bg-teal-100 rounded-lg flex items-center justify-center mb-4">
+                <BarChart3 className="w-6 h-6 text-teal-600" />
+              </div>
+              <CardTitle>データエクスポート</CardTitle>
+              <CardDescription>
+                LPとクリエイティブの一覧、監視履歴をCSV形式でエクスポート。データ分析やレポート作成に活用できます。
               </CardDescription>
             </CardHeader>
           </Card>
