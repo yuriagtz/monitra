@@ -163,7 +163,7 @@ export default function Landing() {
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
-                  <span>3日ごとの自動チェック</span>
+                  <span>14日ごとの自動チェック</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
@@ -194,11 +194,11 @@ export default function Landing() {
               <ul className="space-y-3">
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
-                  <span>最大15ページまで監視</span>
+                  <span>最大10ページまで監視</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
-                  <span>3日ごとの自動チェック</span>
+                  <span>7日ごとの自動チェック</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
@@ -232,11 +232,11 @@ export default function Landing() {
               <ul className="space-y-3">
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
-                  <span>無制限のページ監視</span>
+                  <span>最大100ページまで監視</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
-                  <span>1日ごとの自動チェック</span>
+                  <span>3日ごとの自動チェック</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />

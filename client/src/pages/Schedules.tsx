@@ -384,7 +384,7 @@ export default function Schedules() {
             <div>
               <p className="text-2xl font-bold">{planName}</p>
               <p className="text-sm text-muted-foreground mt-1">
-                最小監視間隔: {user?.plan === "pro" || user?.plan === "admin" ? "1日" : "3日"}
+                最小監視間隔: {minIntervalDays}日
               </p>
             </div>
           </div>
@@ -783,7 +783,7 @@ export default function Schedules() {
           <p>• 監視結果は通常の手動チェックと同様に履歴に記録されます</p>
           <p>• 通知設定が有効な場合、変更検出時に自動的に通知が送信されます</p>
           <p>• スケジュールはいつでも一時停止・再開・削除できます</p>
-          <p>• プランに応じて最小監視間隔が制限されます（フリー・ライト: 3日、プロ: 1日）</p>
+          <p>• プランに応じて最小監視間隔が制限されます（フリー: 14日、ライト: 7日、プロ: 3日、管理者: 1日）</p>
         </CardContent>
       </Card>
 
