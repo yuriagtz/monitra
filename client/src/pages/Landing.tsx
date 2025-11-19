@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Check, Eye, Bell, BarChart3, Clock, Shield, X, Image } from "lucide-react";
+import { Check, Eye, Bell, BarChart3, Clock, X } from "lucide-react";
 import { useLocation } from "wouter";
 import { PLAN_CONFIG } from "@/_core/plan";
 import { APP_LOGO } from "@/const";
@@ -122,36 +122,12 @@ export default function Landing() {
 
           <Card className="border-2 hover:border-blue-400 transition-colors">
             <CardHeader>
-              <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center mb-4">
-                <Shield className="w-6 h-6 text-red-600" />
-              </div>
-              <CardTitle>セキュアな管理</CardTitle>
-              <CardDescription>
-                認証付きLP、Basic認証にも対応。機密情報は暗号化して安全に保管します。
-              </CardDescription>
-            </CardHeader>
-          </Card>
-
-          <Card className="border-2 hover:border-blue-400 transition-colors">
-            <CardHeader>
               <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center mb-4">
                 <BarChart3 className="w-6 h-6 text-indigo-600" />
               </div>
               <CardTitle>履歴管理</CardTitle>
               <CardDescription>
                 LPとクリエイティブの過去の変更履歴を保存。プランに応じた保存期間で、いつでも過去の状態と比較・確認できます。
-              </CardDescription>
-            </CardHeader>
-          </Card>
-
-          <Card className="border-2 hover:border-blue-400 transition-colors">
-            <CardHeader>
-              <div className="w-12 h-12 bg-cyan-100 rounded-lg flex items-center justify-center mb-4">
-                <Image className="w-6 h-6 text-cyan-600" />
-              </div>
-              <CardTitle>クリエイティブ監視</CardTitle>
-              <CardDescription>
-                バナー広告の画像を監視。画像の変更や取得エラーを自動検知し、変更があれば即座に通知します。
               </CardDescription>
             </CardHeader>
           </Card>
