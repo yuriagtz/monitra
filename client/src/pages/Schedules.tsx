@@ -94,10 +94,9 @@ export default function Schedules() {
   }, [user?.plan]);
 
   const handleSaveSchedule = async () => {
-    // バリデーション
+    // バリデーション（警告のみ、サーバー側で自動調整される）
     if (intervalDays < minIntervalDays) {
-      toast.error(`監視間隔は${minIntervalDays}日以上である必要があります`);
-      return;
+      toast.warning(`監視間隔は${minIntervalDays}日以上である必要があります。自動調整します。`);
     }
     if (intervalDays < 1) {
       toast.error("監視間隔は1日以上である必要があります");
@@ -121,9 +120,9 @@ export default function Schedules() {
       }
       
       // 少し待ってから再取得（データベースの更新を確実に反映）
-      await new Promise(resolve => setTimeout(resolve, 200));
-      refetch();
-      scheduleQuery.refetch();
+      await new Promise(resolve => setTimeout(resolve, 500));
+      await scheduleQuery.refetch();
+      await refetch();
     } catch (error: any) {
       toast.error(error.message || "保存に失敗しました");
     }
