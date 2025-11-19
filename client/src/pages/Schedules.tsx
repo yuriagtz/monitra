@@ -410,23 +410,26 @@ export default function Schedules() {
                 id="interval-days"
                 type="number"
                 min={minIntervalDays}
+                step={1}
                 value={intervalDays}
                 onChange={(e) => {
-                  const value = parseInt(e.target.value);
-                  if (!isNaN(value) && value >= minIntervalDays) {
+                  const value = e.target.value === "" ? 0 : parseInt(e.target.value, 10);
+                  if (!isNaN(value) && value >= 1) {
                     setIntervalDays(value);
+                  } else if (e.target.value === "") {
+                    // 空の場合は最小値に設定
+                    setIntervalDays(minIntervalDays);
                   }
                 }}
-                placeholder={`${minIntervalDays}日以上`}
+                placeholder={`${minIntervalDays}日以上（1日単位）`}
               />
               <p className="text-sm text-muted-foreground">
-                {intervalDays}日ごとに監視します（最小: {minIntervalDays}日）
+                {intervalDays >= minIntervalDays ? (
+                  <span>{intervalDays}日ごとに監視します（最小: {minIntervalDays}日）</span>
+                ) : (
+                  <span className="text-red-500">監視間隔は{minIntervalDays}日以上である必要があります</span>
+                )}
               </p>
-              {intervalDays < minIntervalDays && (
-                <p className="text-sm text-red-500">
-                  {minIntervalDays}日以上である必要があります
-                </p>
-              )}
             </div>
 
             <div className="space-y-2">
@@ -598,23 +601,26 @@ export default function Schedules() {
                   id="creative-interval-days"
                   type="number"
                   min={minIntervalDays}
+                  step={1}
                   value={creativeIntervalDays}
                   onChange={(e) => {
-                    const value = parseInt(e.target.value);
-                    if (!isNaN(value) && value >= minIntervalDays) {
+                    const value = e.target.value === "" ? 0 : parseInt(e.target.value, 10);
+                    if (!isNaN(value) && value >= 1) {
                       setCreativeIntervalDays(value);
+                    } else if (e.target.value === "") {
+                      // 空の場合は最小値に設定
+                      setCreativeIntervalDays(minIntervalDays);
                     }
                   }}
-                  placeholder={`${minIntervalDays}日以上`}
+                  placeholder={`${minIntervalDays}日以上（1日単位）`}
                 />
                 <p className="text-sm text-muted-foreground">
-                  {creativeIntervalDays}日ごとに監視します（最小: {minIntervalDays}日）
+                  {creativeIntervalDays >= minIntervalDays ? (
+                    <span>{creativeIntervalDays}日ごとに監視します（最小: {minIntervalDays}日）</span>
+                  ) : (
+                    <span className="text-red-500">監視間隔は{minIntervalDays}日以上である必要があります</span>
+                  )}
                 </p>
-                {creativeIntervalDays < minIntervalDays && (
-                  <p className="text-sm text-red-500">
-                    {minIntervalDays}日以上である必要があります
-                  </p>
-                )}
               </div>
 
               <div className="space-y-2">
