@@ -20,6 +20,9 @@ export default function Landing() {
               alt="Monitra"
               className="h-8 w-auto object-contain"
             />
+            <span className="text-xl font-bold">
+              Monitra
+            </span>
           </div>
           <div className="flex items-center gap-4">
             <Button variant="ghost" onClick={() => setLocation("/login")}>
