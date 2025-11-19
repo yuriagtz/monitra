@@ -88,7 +88,7 @@ export default function Landing() {
               </div>
               <CardTitle>詳細分析レポート</CardTitle>
               <CardDescription>
-                変更履歴、トレンド、統計データを自動集計。週次・月次のPDFレポート生成にも対応。
+                変更履歴、トレンド、統計データを自動集計。グラフや表で視覚的に確認できます。
               </CardDescription>
             </CardHeader>
           </Card>
