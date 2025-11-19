@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -61,28 +61,9 @@ export default function LandingPages() {
   });
   
   const userPlan = (user?.plan as "free" | "light" | "pro" | "admin") || "free";
-  const planInfo = PLAN_CONFIG[userPlan];
-  const maxLpCount = planInfo.maxLpCount;
+  const maxLpCount = PLAN_CONFIG[userPlan].maxLpCount;
   const currentLpCount = landingPages?.length || 0;
   const isAtLimit = maxLpCount !== null && currentLpCount >= maxLpCount;
-
-  // クリエイティブ情報も取得（プラン設定一覧表示用）
-  const { data: creatives } = trpc.creatives.list.useQuery(undefined, {
-    staleTime: 1000 * 60 * 10,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
-  });
-
-  const totalCreatives = creatives?.length || 0;
-  const lpUsagePercent = planInfo.maxLpCount === null 
-    ? 0 
-    : Math.round((currentLpCount / planInfo.maxLpCount) * 100);
-  const creativeUsagePercent = planInfo.maxCreativeCount === null
-    ? 0
-    : Math.round((totalCreatives / planInfo.maxCreativeCount) * 100);
-  
-  const lpIsOverLimit = planInfo.maxLpCount !== null && currentLpCount > planInfo.maxLpCount;
-  const creativeIsOverLimit = planInfo.maxCreativeCount !== null && totalCreatives > planInfo.maxCreativeCount;
   
   const { data: allTags } = trpc.tags.list.useQuery(undefined, {
     // タグリストも10分間キャッシュ
@@ -822,87 +803,6 @@ export default function LandingPages() {
 
   return (
     <div className="space-y-6">
-      {/* プラン設定一覧 */}
-      <Card className="bg-gradient-to-br from-emerald-50/90 via-green-50/80 to-emerald-100/90 hover:shadow-md transition-all duration-300 border border-emerald-200/50">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-emerald-900">現在のプラン</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-start justify-between gap-6">
-            {/* プラン名と最小監視間隔（左側） */}
-            <div>
-              <div className="text-2xl font-bold text-emerald-900">{planInfo.name}</div>
-              <div className="text-sm text-emerald-700/85 mt-1">
-                最小監視間隔: {planInfo.minIntervalDays}日ごと
-              </div>
-            </div>
-
-            {/* 使用状況（右側） */}
-            <div className="flex items-start gap-6">
-              {/* LP使用状況 */}
-              <div className="space-y-2 min-w-[220px]">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-sm text-emerald-700/85 font-medium">監視対象LP</div>
-                  <div className="flex items-center gap-1">
-                    {lpIsOverLimit && (
-                      <AlertTriangle className="h-4 w-4 text-red-600" />
-                    )}
-                    <div className={`font-semibold text-base ${lpIsOverLimit ? 'text-red-600' : 'text-emerald-900'}`}>
-                      {planInfo.maxLpCount === null
-                        ? "無制限"
-                        : `${currentLpCount} / ${planInfo.maxLpCount}`}
-                    </div>
-                  </div>
-                </div>
-                {planInfo.maxLpCount !== null && (
-                  <>
-                    <div className="text-xs text-emerald-700/80 text-right">
-                      ({lpUsagePercent}%)
-                    </div>
-                    <div className="relative">
-                      <Progress 
-                        value={Math.min(100, lpUsagePercent)} 
-                        className={`h-2 ${lpIsOverLimit ? '[&>div>div]:bg-red-500' : ''}`}
-                      />
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* クリエイティブ使用状況 */}
-              <div className="space-y-2 min-w-[220px]">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-sm text-emerald-700/85 font-medium">監視対象クリエイティブ</div>
-                  <div className="flex items-center gap-1">
-                    {creativeIsOverLimit && (
-                      <AlertTriangle className="h-4 w-4 text-red-600" />
-                    )}
-                    <div className={`font-semibold text-base ${creativeIsOverLimit ? 'text-red-600' : 'text-emerald-900'}`}>
-                      {planInfo.maxCreativeCount === null
-                        ? "無制限"
-                        : `${totalCreatives} / ${planInfo.maxCreativeCount}`}
-                    </div>
-                  </div>
-                </div>
-                {planInfo.maxCreativeCount !== null && (
-                  <>
-                    <div className="text-xs text-emerald-700/80 text-right">
-                      ({creativeUsagePercent}%)
-                    </div>
-                    <div className="relative">
-                      <Progress 
-                        value={Math.min(100, creativeUsagePercent)} 
-                        className={`h-2 ${creativeIsOverLimit ? '[&>div>div]:bg-red-500' : ''}`}
-                      />
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>

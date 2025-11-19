@@ -1,7 +1,9 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Check, Eye, Bell, BarChart3, Clock, Shield } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Check, Eye, Bell, BarChart3, Clock, Shield, X } from "lucide-react";
 import { useLocation } from "wouter";
+import { PLAN_CONFIG } from "@/_core/plan";
 
 export default function Landing() {
   const [, setLocation] = useLocation();
@@ -260,6 +262,253 @@ export default function Landing() {
               </Button>
             </CardContent>
           </Card>
+        </div>
+      </section>
+
+      {/* Detailed Plan Comparison Table */}
+      <section className="container mx-auto px-4 py-20">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">プラン詳細比較</h2>
+          <p className="text-lg text-gray-600">
+            各プランの機能と制限を詳しく比較できます
+          </p>
+        </div>
+        <div className="max-w-6xl mx-auto overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="min-w-[200px]">機能・制限</TableHead>
+                <TableHead className="text-center">フリープラン</TableHead>
+                <TableHead className="text-center">ライトプラン</TableHead>
+                <TableHead className="text-center">プロプラン</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {/* 月額料金 */}
+              <TableRow>
+                <TableCell className="font-medium">月額料金</TableCell>
+                <TableCell className="text-center">¥0</TableCell>
+                <TableCell className="text-center">¥980/月</TableCell>
+                <TableCell className="text-center">¥2,980/月</TableCell>
+              </TableRow>
+              
+              {/* 無料お試し期間 */}
+              <TableRow>
+                <TableCell className="font-medium">無料お試し期間</TableCell>
+                <TableCell className="text-center">-</TableCell>
+                <TableCell className="text-center">-</TableCell>
+                <TableCell className="text-center">30日間</TableCell>
+              </TableRow>
+              
+              {/* 最小監視間隔 */}
+              <TableRow>
+                <TableCell className="font-medium">最小監視間隔</TableCell>
+                <TableCell className="text-center">{PLAN_CONFIG.free.minIntervalDays}日ごと</TableCell>
+                <TableCell className="text-center">{PLAN_CONFIG.light.minIntervalDays}日ごと</TableCell>
+                <TableCell className="text-center">{PLAN_CONFIG.pro.minIntervalDays}日ごと</TableCell>
+              </TableRow>
+              
+              {/* 最大LP登録数 */}
+              <TableRow>
+                <TableCell className="font-medium">最大LP登録数</TableCell>
+                <TableCell className="text-center">{PLAN_CONFIG.free.maxLpCount}ページ</TableCell>
+                <TableCell className="text-center">{PLAN_CONFIG.light.maxLpCount}ページ</TableCell>
+                <TableCell className="text-center">{PLAN_CONFIG.pro.maxLpCount}ページ</TableCell>
+              </TableRow>
+              
+              {/* 最大クリエイティブ登録数 */}
+              <TableRow>
+                <TableCell className="font-medium">最大クリエイティブ登録数</TableCell>
+                <TableCell className="text-center">{PLAN_CONFIG.free.maxCreativeCount}件</TableCell>
+                <TableCell className="text-center">{PLAN_CONFIG.light.maxCreativeCount}件</TableCell>
+                <TableCell className="text-center">{PLAN_CONFIG.pro.maxCreativeCount}件</TableCell>
+              </TableRow>
+              
+              {/* 1日の手動監視実行回数制限 */}
+              <TableRow>
+                <TableCell className="font-medium">1日の手動監視実行回数制限</TableCell>
+                <TableCell className="text-center">{PLAN_CONFIG.free.maxDailyManualMonitorCount}回</TableCell>
+                <TableCell className="text-center">{PLAN_CONFIG.light.maxDailyManualMonitorCount}回</TableCell>
+                <TableCell className="text-center">{PLAN_CONFIG.pro.maxDailyManualMonitorCount}回</TableCell>
+              </TableRow>
+              
+              {/* 監視履歴の保存期間 */}
+              <TableRow>
+                <TableCell className="font-medium">監視履歴の保存期間</TableCell>
+                <TableCell className="text-center">{PLAN_CONFIG.free.historyRetentionDays}日間</TableCell>
+                <TableCell className="text-center">{PLAN_CONFIG.light.historyRetentionDays}日間</TableCell>
+                <TableCell className="text-center">{PLAN_CONFIG.pro.historyRetentionDays}日間</TableCell>
+              </TableRow>
+              
+              {/* 自動変更検知 */}
+              <TableRow>
+                <TableCell className="font-medium">自動変更検知</TableCell>
+                <TableCell className="text-center">
+                  <Check className="w-5 h-5 text-green-600 mx-auto" />
+                </TableCell>
+                <TableCell className="text-center">
+                  <Check className="w-5 h-5 text-green-600 mx-auto" />
+                </TableCell>
+                <TableCell className="text-center">
+                  <Check className="w-5 h-5 text-green-600 mx-auto" />
+                </TableCell>
+              </TableRow>
+              
+              {/* リンク切れチェック */}
+              <TableRow>
+                <TableCell className="font-medium">リンク切れチェック</TableCell>
+                <TableCell className="text-center">
+                  <Check className="w-5 h-5 text-green-600 mx-auto" />
+                </TableCell>
+                <TableCell className="text-center">
+                  <Check className="w-5 h-5 text-green-600 mx-auto" />
+                </TableCell>
+                <TableCell className="text-center">
+                  <Check className="w-5 h-5 text-green-600 mx-auto" />
+                </TableCell>
+              </TableRow>
+              
+              {/* クリエイティブ監視 */}
+              <TableRow>
+                <TableCell className="font-medium">クリエイティブ監視</TableCell>
+                <TableCell className="text-center">
+                  <Check className="w-5 h-5 text-green-600 mx-auto" />
+                </TableCell>
+                <TableCell className="text-center">
+                  <Check className="w-5 h-5 text-green-600 mx-auto" />
+                </TableCell>
+                <TableCell className="text-center">
+                  <Check className="w-5 h-5 text-green-600 mx-auto" />
+                </TableCell>
+              </TableRow>
+              
+              {/* 分析レポート */}
+              <TableRow>
+                <TableCell className="font-medium">分析レポート</TableCell>
+                <TableCell className="text-center">
+                  <Check className="w-5 h-5 text-green-600 mx-auto" />
+                </TableCell>
+                <TableCell className="text-center">
+                  <Check className="w-5 h-5 text-green-600 mx-auto" />
+                </TableCell>
+                <TableCell className="text-center">
+                  <Check className="w-5 h-5 text-green-600 mx-auto" />
+                </TableCell>
+              </TableRow>
+              
+              {/* メール通知 */}
+              <TableRow>
+                <TableCell className="font-medium">メール通知</TableCell>
+                <TableCell className="text-center">
+                  <Check className="w-5 h-5 text-green-600 mx-auto" />
+                </TableCell>
+                <TableCell className="text-center">
+                  <Check className="w-5 h-5 text-green-600 mx-auto" />
+                </TableCell>
+                <TableCell className="text-center">
+                  <Check className="w-5 h-5 text-green-600 mx-auto" />
+                </TableCell>
+              </TableRow>
+              
+              {/* Slack通知 */}
+              <TableRow>
+                <TableCell className="font-medium">Slack通知</TableCell>
+                <TableCell className="text-center">
+                  <X className="w-5 h-5 text-gray-400 mx-auto" />
+                </TableCell>
+                <TableCell className="text-center">
+                  <Check className="w-5 h-5 text-green-600 mx-auto" />
+                </TableCell>
+                <TableCell className="text-center">
+                  <Check className="w-5 h-5 text-green-600 mx-auto" />
+                </TableCell>
+              </TableRow>
+              
+              {/* Webhook通知 */}
+              <TableRow>
+                <TableCell className="font-medium">Webhook通知</TableCell>
+                <TableCell className="text-center">
+                  <X className="w-5 h-5 text-gray-400 mx-auto" />
+                </TableCell>
+                <TableCell className="text-center">
+                  <Check className="w-5 h-5 text-green-600 mx-auto" />
+                </TableCell>
+                <TableCell className="text-center">
+                  <Check className="w-5 h-5 text-green-600 mx-auto" />
+                </TableCell>
+              </TableRow>
+              
+              {/* Chatwork通知 */}
+              <TableRow>
+                <TableCell className="font-medium">Chatwork通知</TableCell>
+                <TableCell className="text-center">
+                  <X className="w-5 h-5 text-gray-400 mx-auto" />
+                </TableCell>
+                <TableCell className="text-center">
+                  <Check className="w-5 h-5 text-green-600 mx-auto" />
+                </TableCell>
+                <TableCell className="text-center">
+                  <Check className="w-5 h-5 text-green-600 mx-auto" />
+                </TableCell>
+              </TableRow>
+              
+              {/* カスタムスケジュール設定 */}
+              <TableRow>
+                <TableCell className="font-medium">カスタムスケジュール設定</TableCell>
+                <TableCell className="text-center">
+                  <Check className="w-5 h-5 text-green-600 mx-auto" />
+                </TableCell>
+                <TableCell className="text-center">
+                  <Check className="w-5 h-5 text-green-600 mx-auto" />
+                </TableCell>
+                <TableCell className="text-center">
+                  <Check className="w-5 h-5 text-green-600 mx-auto" />
+                </TableCell>
+              </TableRow>
+              
+              {/* データエクスポート（CSV） */}
+              <TableRow>
+                <TableCell className="font-medium">データエクスポート（CSV）</TableCell>
+                <TableCell className="text-center">
+                  <Check className="w-5 h-5 text-green-600 mx-auto" />
+                </TableCell>
+                <TableCell className="text-center">
+                  <Check className="w-5 h-5 text-green-600 mx-auto" />
+                </TableCell>
+                <TableCell className="text-center">
+                  <Check className="w-5 h-5 text-green-600 mx-auto" />
+                </TableCell>
+              </TableRow>
+              
+              {/* PDFレポート生成 */}
+              <TableRow>
+                <TableCell className="font-medium">PDFレポート生成</TableCell>
+                <TableCell className="text-center">
+                  <X className="w-5 h-5 text-gray-400 mx-auto" />
+                </TableCell>
+                <TableCell className="text-center">
+                  <X className="w-5 h-5 text-gray-400 mx-auto" />
+                </TableCell>
+                <TableCell className="text-center">
+                  <Check className="w-5 h-5 text-green-600 mx-auto" />
+                </TableCell>
+              </TableRow>
+              
+              {/* 優先サポート */}
+              <TableRow>
+                <TableCell className="font-medium">優先サポート</TableCell>
+                <TableCell className="text-center">
+                  <X className="w-5 h-5 text-gray-400 mx-auto" />
+                </TableCell>
+                <TableCell className="text-center">
+                  <X className="w-5 h-5 text-gray-400 mx-auto" />
+                </TableCell>
+                <TableCell className="text-center">
+                  <Check className="w-5 h-5 text-green-600 mx-auto" />
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
         </div>
       </section>
 
