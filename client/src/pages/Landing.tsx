@@ -42,15 +42,15 @@ export default function Landing() {
             変化を逃さない
             <br />
             <span className="bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">
-              LP分析の自動監視AI
+              LPとクリエイティブ分析の自動監視AI
             </span>
           </h1>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            登録したランディングページの「変化」「有効性」を自動検知。
+            登録したランディングページとクリエイティブの「変化」「有効性」を自動検知。
             <br />
             もう"開いて確認する"必要はありません。
             <br />
-            <strong className="text-gray-900">Monitraは、LPを24時間見守るインテリジェント・ウォッチャーです。</strong>
+            <strong className="text-gray-900">Monitraは、LPとクリエイティブを24時間見守るインテリジェント・ウォッチャーです。</strong>
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
             <Button size="lg" className="text-lg px-8 py-6" onClick={() => setLocation("/register")}>
@@ -164,7 +164,11 @@ export default function Landing() {
               <ul className="space-y-3">
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
-                  <span>最大3ページまで監視</span>
+                  <span>最大3ページまで監視（LP）</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-5 h-5 text-green-600" />
+                  <span>最大10件まで監視（クリエイティブ）</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
@@ -199,7 +203,11 @@ export default function Landing() {
               <ul className="space-y-3">
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
-                  <span>最大10ページまで監視</span>
+                  <span>最大10ページまで監視（LP）</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-5 h-5 text-green-600" />
+                  <span>最大30件まで監視（クリエイティブ）</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
@@ -241,7 +249,11 @@ export default function Landing() {
               <ul className="space-y-3">
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
-                  <span>最大100ページまで監視</span>
+                  <span>最大100ページまで監視（LP）</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-5 h-5 text-green-600" />
+                  <span>最大300件まで監視（クリエイティブ）</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
@@ -455,7 +467,7 @@ export default function Landing() {
       <section className="container mx-auto px-4 py-20 text-center">
         <div className="max-w-3xl mx-auto space-y-6">
           <h2 className="text-3xl md:text-4xl font-bold">
-            今すぐMonitraで、LP管理を自動化しましょう
+            今すぐMonitraで、LPとクリエイティブの管理を自動化しましょう
           </h2>
           <p className="text-lg text-gray-600">
             無料プランで今日から始められます。クレジットカード不要。
