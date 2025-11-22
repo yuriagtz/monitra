@@ -164,11 +164,11 @@ export default function Landing() {
               <ul className="space-y-3">
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
-                  <span>LP: 最大3ページまで監視</span>
+                  <span>LP：最大3ページまで監視</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
-                  <span>クリエイティブ: 最大10件まで監視</span>
+                  <span>クリエイティブ：最大10件まで監視</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
@@ -203,11 +203,11 @@ export default function Landing() {
               <ul className="space-y-3">
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
-                  <span>LP: 最大10ページまで監視</span>
+                  <span>LP：最大10ページまで監視</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
-                  <span>クリエイティブ: 最大30件まで監視</span>
+                  <span>クリエイティブ：最大30件まで監視</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
@@ -215,7 +215,7 @@ export default function Landing() {
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
-                  <span>メール・Slack・Webhook通知</span>
+                  <span>メール/Slack/Chatwork/Discord通知</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
@@ -249,11 +249,11 @@ export default function Landing() {
               <ul className="space-y-3">
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
-                  <span>LP: 最大100ページまで監視</span>
+                  <span>LP：最大100ページまで監視</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
-                  <span>クリエイティブ: 最大300件まで監視</span>
+                  <span>クリエイティブ：最大300件まで監視</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
@@ -261,7 +261,7 @@ export default function Landing() {
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
-                  <span>メール・Slack・Webhook・Chatwork通知</span>
+                  <span>メール/Slack/Chatwork/Discord通知</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
