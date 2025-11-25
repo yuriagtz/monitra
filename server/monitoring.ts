@@ -155,6 +155,12 @@ async function installChromeIfNeeded(): Promise<string | undefined> {
     
     console.log(`[Puppeteer] Installing Chrome ${buildId} to ${cacheDir}... (timeout: ${timeout/1000}s)`);
     
+    // 進捗ログ用のタイマー（30秒ごとにログを出力）
+    const progressInterval = setInterval(() => {
+      const elapsed = ((Date.now() - installStartTime) / 1000).toFixed(1);
+      console.log(`[Puppeteer] Chrome installation in progress... (elapsed: ${elapsed}s)`);
+    }, 30000);
+    
     // タイムアウト付きでインストール
     const installPromise = install({
       browser: Browser.CHROMIUM,
@@ -171,10 +177,12 @@ async function installChromeIfNeeded(): Promise<string | undefined> {
     
     try {
       await Promise.race([installPromise, timeoutPromise]);
+      clearInterval(progressInterval);
       
       const installDuration = ((Date.now() - installStartTime) / 1000).toFixed(1);
       console.log(`[Puppeteer] Chrome installation completed in ${installDuration}s`);
     } catch (installError: any) {
+      clearInterval(progressInterval);
       const elapsedTime = ((Date.now() - installStartTime) / 1000).toFixed(1);
       
       if (installError.message?.includes("timeout")) {
