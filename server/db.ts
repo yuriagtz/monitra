@@ -255,15 +255,6 @@ export async function getCreativesByUserId(userId: number): Promise<Creative[]> 
     .orderBy(desc(creatives.updatedAt)); // 最新順にソート
   
   return creativesResult;
-  const db = await getDb();
-  if (!db) return [];
-
-  const list = await db
-    .select()
-    .from(creatives)
-    .where(eq(creatives.userId, userId));
-
-  return list;
 }
 
 export async function getCreativeById(id: number): Promise<Creative | undefined> {
