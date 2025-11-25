@@ -1,4 +1,5 @@
 import puppeteer from "puppeteer";
+import { install, detectBrowserPlatform, resolveBuildId, computeExecutablePath } from "@puppeteer/browsers";
 import pixelmatch from "pixelmatch";
 import { PNG } from "pngjs";
 import { storagePut, storageGet, storageDelete, extractStorageKeyFromUrl } from "./storage";
@@ -6,20 +7,102 @@ import * as db from "./db";
 import { sendNotifications } from "./notification";
 import crypto from "crypto";
 import { compressImageToJpeg, convertKeyToJpeg } from "./imageCompression";
+import path from "path";
+import fs from "fs";
+import os from "os";
 
 /**
- * Take a screenshot of a URL and return the buffer
+ * Get Chrome executable path, installing if necessary
  */
-export async function captureScreenshot(url: string): Promise<Buffer> {
-  const browser = await puppeteer.launch({
+async function getChromeExecutablePath(): Promise<string> {
+  // Vercel環境では /tmp のみ書き込み可能
+  const cacheDir = process.env.VERCEL ? "/tmp/.cache/puppeteer" : path.join(os.homedir(), ".cache", "puppeteer");
+  
+  // キャッシュディレクトリを作成
+  if (!fs.existsSync(cacheDir)) {
+    fs.mkdirSync(cacheDir, { recursive: true });
+  }
+  
+  try {
+    const platform = detectBrowserPlatform();
+    if (!platform) {
+      throw new Error("Could not detect browser platform");
+    }
+    
+    // 最新の安定版ChromeのビルドIDを取得
+    const buildId = await resolveBuildId("chrome", platform, "latest");
+    
+    // Chrome実行ファイルのパスを計算
+    const executablePath = computeExecutablePath({
+      browser: "chrome",
+      buildId,
+      cacheDir,
+      platform,
+    });
+    
+    // Chromeが存在するかチェック
+    if (!fs.existsSync(executablePath)) {
+      console.log(`[Puppeteer] Installing Chrome ${buildId} to ${cacheDir}...`);
+      await install({
+        browser: "chrome",
+        buildId,
+        cacheDir,
+        platform,
+      });
+      console.log(`[Puppeteer] Chrome installed successfully at ${executablePath}`);
+    }
+    
+    return executablePath;
+  } catch (error: any) {
+    console.error("[Puppeteer] Error getting Chrome executable path:", error);
+    // フォールバック: Puppeteerのデフォルト実行パスを試す
+    try {
+      const defaultPath = await puppeteer.executablePath();
+      if (defaultPath && fs.existsSync(defaultPath)) {
+        return defaultPath;
+      }
+    } catch (fallbackError) {
+      console.error("[Puppeteer] Fallback also failed:", fallbackError);
+    }
+    throw new Error(`Could not get Chrome executable path: ${error.message}`);
+  }
+}
+
+/**
+ * Launch browser with proper Chrome path
+ */
+async function launchBrowser() {
+  let executablePath: string | undefined;
+  
+  try {
+    executablePath = await getChromeExecutablePath();
+  } catch (error: any) {
+    console.warn(`[Puppeteer] Could not get explicit Chrome path: ${error.message}, using default`);
+    // フォールバック: デフォルトのlaunchを試す
+  }
+  
+  return await puppeteer.launch({
     headless: true,
+    executablePath,
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
       "--disable-dev-shm-usage",
       "--disable-gpu",
+      "--disable-software-rasterizer",
+      "--disable-extensions",
+      "--disable-background-timer-throttling",
+      "--disable-backgrounding-occluded-windows",
+      "--disable-renderer-backgrounding",
     ],
   });
+}
+
+/**
+ * Take a screenshot of a URL and return the buffer
+ */
+export async function captureScreenshot(url: string): Promise<Buffer> {
+  const browser = await launchBrowser();
 
   try {
     const page = await browser.newPage();
@@ -89,15 +172,7 @@ export async function captureScreenshot(url: string): Promise<Buffer> {
  * Check if a URL is accessible (not broken)
  */
 export async function checkLinkStatus(url: string): Promise<{ ok: boolean; status?: number; error?: string }> {
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-    ],
-  });
+  const browser = await launchBrowser();
 
   try {
     const page = await browser.newPage();
