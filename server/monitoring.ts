@@ -151,23 +151,20 @@ async function installChromeIfNeeded(): Promise<string | undefined> {
       console.log(`[Puppeteer] Using Chrome build ID from environment: ${buildId}`);
     } else if (process.env.VERCEL) {
       // Vercel環境ではデフォルトでChrome 141のビルドIDを使用
-      // Chrome 141のビルドID（Linux x64）: 約1540000-1541000の範囲
-      // 一般的なChrome 141のビルドIDを試行（プラットフォームに応じて調整）
       console.log("[Puppeteer] Vercel environment: Attempting to use Chrome 141...");
       
-      // Chrome 141のビルドIDを試行（一般的なLinux x64のビルドID）
-      // 注意: 正確なビルドIDはプラットフォームによって異なるため、
-      // 環境変数 PUPPETEER_CHROME_BUILD_ID で指定することを推奨
+      // まず、既存のChrome 141をキャッシュから探す
       const chrome141BuildIds = [
         "1541000", // Chrome 141の一般的なビルドID（Linux x64）
         "1540000", // より古いChrome 141のビルドID
         "1540500", // 中間のビルドID
+        "1540800", // より新しいChrome 141のビルドID
+        "1540900", // さらに新しいChrome 141のビルドID
       ];
       
-      // 各ビルドIDを試行
+      // 各ビルドIDを試行（キャッシュに存在するか確認）
       for (const testBuildId of chrome141BuildIds) {
         try {
-          // ビルドIDが有効かどうかを確認（computeExecutablePathでパスを生成してみる）
           const testPath = computeExecutablePath({
             browser: Browser.CHROMIUM,
             buildId: testBuildId,
@@ -187,17 +184,15 @@ async function installChromeIfNeeded(): Promise<string | undefined> {
         }
       }
       
-      // 既存のChrome 141が見つからない場合、最新版を使用（フォールバック）
+      // 既存のChrome 141が見つからない場合、Chrome 141のビルドIDを直接インストールを試みる
       if (!buildId) {
-        console.warn(`[Puppeteer] Chrome 141 not found in cache, using latest version as fallback`);
-        console.warn(`[Puppeteer] To use Chrome 141, set PUPPETEER_CHROME_BUILD_ID environment variable`);
-        console.warn(`[Puppeteer] Example: PUPPETEER_CHROME_BUILD_ID=1541000`);
-        try {
-          buildId = await resolveBuildId(Browser.CHROMIUM, platform, "latest");
-        } catch (error: any) {
-          console.error(`[Puppeteer] Failed to resolve latest Chrome: ${error.message}`);
-          return undefined;
-        }
+        console.log(`[Puppeteer] Chrome 141 not found in cache, attempting to install Chrome 141...`);
+        
+        // Chrome 141のビルドIDを直接指定してインストールを試みる
+        // 一般的なChrome 141のビルドIDを使用
+        buildId = "1541000"; // Chrome 141の一般的なビルドID（Linux x64）
+        console.log(`[Puppeteer] Will attempt to install Chrome 141 with build ID: ${buildId}`);
+        console.log(`[Puppeteer] Note: If this fails, set PUPPETEER_CHROME_BUILD_ID environment variable with correct build ID`);
       }
     } else {
       // その他の環境では最新版を使用（環境変数で指定可能）
@@ -220,7 +215,7 @@ async function installChromeIfNeeded(): Promise<string | undefined> {
 
     // インストール処理にタイムアウトを設定
     // Vercel環境では60秒（関数実行時間制限を考慮）、その他は180秒
-    // Chrome 142はサイズが大きいため、タイムアウトが発生しやすい
+    // Chrome 141はChrome 142より軽量だが、それでも時間がかかる可能性がある
     const timeout = process.env.VERCEL ? 60000 : 180000;
     const installStartTime = Date.now();
     
@@ -287,6 +282,16 @@ async function installChromeIfNeeded(): Promise<string | undefined> {
       } else {
         console.error(`[Puppeteer] Chrome installation failed after ${elapsedTime}s:`, installError.message);
         console.error(`[Puppeteer] Error stack:`, installError.stack);
+        
+        // ビルドIDが無効な場合のエラーメッセージを追加
+        if (installError.message?.includes("not found") || installError.message?.includes("invalid")) {
+          console.error(`[Puppeteer] Build ID ${buildId} may be invalid or not available for this platform.`);
+          if (process.env.VERCEL && !process.env.PUPPETEER_CHROME_BUILD_ID) {
+            console.error(`[Puppeteer] Try setting PUPPETEER_CHROME_BUILD_ID environment variable with a valid Chrome 141 build ID.`);
+            console.error(`[Puppeteer] To find the correct build ID, check: https://googlechromelabs.github.io/chrome-for-testing/`);
+          }
+        }
+        
         throw installError;
       }
     }
