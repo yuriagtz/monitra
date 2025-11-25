@@ -715,8 +715,23 @@ async function launchBrowser() {
         console.warn(`[Puppeteer] ⚠ Chrome executable not found at: ${executablePath} (will try to launch anyway)`);
       }
       
+      // パフォーマンス最適化: 不要な機能を無効化
+      const launchArgs = [
+        ...chromium.args,
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-software-rasterizer',
+        '--disable-extensions',
+        '--disable-background-networking',
+        '--disable-background-timer-throttling',
+        '--disable-renderer-backgrounding',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-features=TranslateUI',
+        '--disable-ipc-flooding-protection',
+      ];
+      
       return await puppeteerCore.launch({
-        args: chromium.args,
+        args: launchArgs,
         defaultViewport: {
           width: 1920,
           height: 1080,
@@ -907,11 +922,11 @@ export async function captureScreenshot(url: string): Promise<Buffer> {
       timeout: 60000 
     });
     
-    // Wait for dynamic content to load
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Wait for dynamic content to load (短縮: 2秒→1秒)
+    await new Promise(resolve => setTimeout(resolve, 1000));
     
     // ページの実際の高さを取得して、スクロールを確実に行う
-    const pageHeight = await page.evaluate(() => {
+    const pageHeight = await (page.evaluate as any)(() => {
       return Math.max(
         document.body.scrollHeight,
         document.body.offsetHeight,
@@ -928,24 +943,26 @@ export async function captureScreenshot(url: string): Promise<Buffer> {
       const scrollSteps = Math.ceil(pageHeight / viewportHeight);
       
       for (let i = 0; i < scrollSteps; i++) {
-        await page.evaluate((step) => {
+        await (page.evaluate as any)((step: number) => {
           window.scrollTo(0, step * 800);
         }, i);
-        // 各スクロール後に少し待機
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // 各スクロール後の待機時間を短縮: 500ms→300ms
+        await new Promise(resolve => setTimeout(resolve, 300));
       }
       
       // 最後に一番下までスクロール
-      await page.evaluate(() => {
+      await (page.evaluate as any)(() => {
         window.scrollTo(0, document.body.scrollHeight);
       });
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // 待機時間を短縮: 1000ms→500ms
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       // トップに戻る（fullPage screenshotは最初から最後まで撮影するため）
-      await page.evaluate(() => {
+      await (page.evaluate as any)(() => {
         window.scrollTo(0, 0);
       });
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // 待機時間を短縮: 500ms→200ms
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
     
     // fullPageオプションで全体を撮影（余白を確保）
@@ -954,7 +971,27 @@ export async function captureScreenshot(url: string): Promise<Buffer> {
       // スクロールバーを非表示にする（オプション）
       captureBeyondViewport: true,
     });
-    return screenshot as Buffer;
+    
+    // スクリーンショットのバッファを検証
+    if (!screenshot || !Buffer.isBuffer(screenshot)) {
+      throw new Error("スクリーンショットの取得に失敗しました: バッファが無効です");
+    }
+    
+    const screenshotBuffer = screenshot as Buffer;
+    
+    // PNGシグネチャを確認
+    if (screenshotBuffer.length < 8) {
+      throw new Error("スクリーンショットの取得に失敗しました: バッファが小さすぎます");
+    }
+    
+    const pngSignature = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+    if (!screenshotBuffer.subarray(0, 8).equals(pngSignature)) {
+      console.warn("[Puppeteer] Screenshot may be corrupted: Invalid PNG signature");
+      // 警告のみで続行（一部の環境では正常に動作する可能性がある）
+    }
+    
+    console.log(`[Puppeteer] Screenshot captured successfully: ${screenshotBuffer.length} bytes`);
+    return screenshotBuffer;
   } catch (error: any) {
     // スクリーンショット撮影中のエラーを詳細に記録
     console.error(`[Puppeteer] Screenshot capture failed for ${url}:`, error.message);
@@ -1046,14 +1083,58 @@ export async function checkLinkStatus(url: string): Promise<{ ok: boolean; statu
 }
 
 /**
+ * Validate PNG buffer before reading
+ */
+function validatePngBuffer(buffer: Buffer, label: string): void {
+  if (!buffer || buffer.length === 0) {
+    throw new Error(`${label}: Buffer is empty or invalid`);
+  }
+  
+  // Check PNG signature (first 8 bytes)
+  const pngSignature = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+  if (buffer.length < 8 || !buffer.subarray(0, 8).equals(pngSignature)) {
+    throw new Error(`${label}: Invalid PNG signature. Buffer may be corrupted or incomplete.`);
+  }
+  
+  // Check minimum size (PNG header + at least one chunk)
+  if (buffer.length < 24) {
+    throw new Error(`${label}: Buffer too small to be a valid PNG (${buffer.length} bytes)`);
+  }
+}
+
+/**
  * Compare two screenshots and return difference percentage
  */
 export async function compareScreenshots(
   img1Buffer: Buffer,
   img2Buffer: Buffer
 ): Promise<{ diffPercentage: number; diffImageBuffer?: Buffer }> {
-  const img1 = PNG.sync.read(img1Buffer);
-  const img2 = PNG.sync.read(img2Buffer);
+  try {
+    validatePngBuffer(img1Buffer, "Image 1");
+    validatePngBuffer(img2Buffer, "Image 2");
+  } catch (error: any) {
+    console.error("[Image Compare] PNG validation failed:", error.message);
+    throw new Error(`画像の検証に失敗しました: ${error.message}`);
+  }
+  
+  let img1: PNG;
+  let img2: PNG;
+  
+  try {
+    img1 = PNG.sync.read(img1Buffer);
+  } catch (error: any) {
+    console.error("[Image Compare] Failed to read image 1:", error.message);
+    console.error("[Image Compare] Image 1 buffer size:", img1Buffer.length, "bytes");
+    throw new Error(`画像1の読み込みに失敗しました: ${error.message}`);
+  }
+  
+  try {
+    img2 = PNG.sync.read(img2Buffer);
+  } catch (error: any) {
+    console.error("[Image Compare] Failed to read image 2:", error.message);
+    console.error("[Image Compare] Image 2 buffer size:", img2Buffer.length, "bytes");
+    throw new Error(`画像2の読み込みに失敗しました: ${error.message}`);
+  }
 
   const { width, height } = img1;
   
@@ -1092,8 +1173,32 @@ export async function compareScreenshotsByFirstViewAndBody(
   diffImageBuffer?: Buffer;
   analysis: string;
 }> {
-  const img1 = PNG.sync.read(img1Buffer);
-  const img2 = PNG.sync.read(img2Buffer);
+  try {
+    validatePngBuffer(img1Buffer, "Image 1");
+    validatePngBuffer(img2Buffer, "Image 2");
+  } catch (error: any) {
+    console.error("[Image Compare] PNG validation failed:", error.message);
+    throw new Error(`画像の検証に失敗しました: ${error.message}`);
+  }
+  
+  let img1: PNG;
+  let img2: PNG;
+  
+  try {
+    img1 = PNG.sync.read(img1Buffer);
+  } catch (error: any) {
+    console.error("[Image Compare] Failed to read image 1:", error.message);
+    console.error("[Image Compare] Image 1 buffer size:", img1Buffer.length, "bytes");
+    throw new Error(`画像1の読み込みに失敗しました: ${error.message}`);
+  }
+  
+  try {
+    img2 = PNG.sync.read(img2Buffer);
+  } catch (error: any) {
+    console.error("[Image Compare] Failed to read image 2:", error.message);
+    console.error("[Image Compare] Image 2 buffer size:", img2Buffer.length, "bytes");
+    throw new Error(`画像2の読み込みに失敗しました: ${error.message}`);
+  }
 
   let width = img1.width;
   let height = img1.height;
