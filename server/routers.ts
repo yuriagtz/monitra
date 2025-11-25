@@ -504,12 +504,15 @@ export const appRouter = router({
           throw new Error(quotaCheck.error || "手動監視の制限により実行できません");
         }
         
-        // 監視を実行して完了を待つ（タイムアウト: 2分）
+        // 監視を実行して完了を待つ（タイムアウト: 280秒）
+        // Vercel環境では、vercel.jsonでmaxDurationを300秒に設定しているため、それに合わせてタイムアウトを設定
+        // 実際の関数実行時間制限（300秒）より少し短く設定して、エラーハンドリングの時間を確保
         try {
+          const timeoutMs = process.env.VERCEL ? 280000 : 120000; // Vercel: 280秒（約4.7分）、その他: 120秒（2分）
           const result = await Promise.race([
             monitorLandingPage(landingPage.id),
             new Promise<never>((_, reject) => {
-              setTimeout(() => reject(new Error("監視がタイムアウトしました（2分）")), 120000);
+              setTimeout(() => reject(new Error(`監視がタイムアウトしました（${timeoutMs/1000}秒）`)), timeoutMs);
             }),
           ]);
           
