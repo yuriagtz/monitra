@@ -54,7 +54,14 @@ export default function CreativeHistory() {
     }
   );
 
-  const { data: creatives } = trpc.creatives.list.useQuery();
+  const { data: creatives } = trpc.creatives.list.useQuery(undefined, {
+    // パフォーマンス最適化: キャッシュ時間を延長
+    staleTime: 1000 * 60 * 10,
+    cacheTime: 1000 * 60 * 30,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+  });
 
   // クリエイティブ情報を取得
   const creative = creatives?.find((c) => c.id === creativeId);

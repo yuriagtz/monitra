@@ -12,3 +12,10 @@ CREATE INDEX IF NOT EXISTS idx_monitoring_history_creativeId_createdAt ON monito
 CREATE INDEX IF NOT EXISTS idx_landing_page_tags_landingPageId ON landing_page_tags(landing_page_id);
 CREATE INDEX IF NOT EXISTS idx_landing_page_tags_tagId ON landing_page_tags(tag_id);
 
+-- creativesテーブルのインデックス追加（クリエイティブ一覧取得の高速化）
+CREATE INDEX IF NOT EXISTS idx_creatives_userId ON creatives(user_id);
+
+-- creative_tagsテーブルのインデックス追加（タグ関連の高速化）
+CREATE INDEX IF NOT EXISTS idx_creative_tags_creativeId ON creative_tags(creative_id);
+CREATE INDEX IF NOT EXISTS idx_creative_tags_tagId ON creative_tags(tag_id);
+

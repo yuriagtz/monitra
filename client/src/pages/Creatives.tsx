@@ -95,8 +95,12 @@ export default function Creatives() {
   const { data: creatives, isLoading } = trpc.creatives.list.useQuery(
     undefined,
     {
-      staleTime: 1000 * 60 * 5,
+      // パフォーマンス最適化: キャッシュ時間を延長
+      staleTime: 1000 * 60 * 10, // 10分間は新鮮とみなす
+      cacheTime: 1000 * 60 * 30, // 30分間メモリに保持
       refetchOnWindowFocus: false,
+      refetchOnMount: false,
+      refetchOnReconnect: false,
     }
   );
 
@@ -106,17 +110,23 @@ export default function Creatives() {
   const isAtLimit = maxCreativeCount !== null && currentCreativeCount >= maxCreativeCount;
 
   const { data: allTags } = trpc.tags.list.useQuery(undefined, {
-    staleTime: 1000 * 60 * 10,
+    // パフォーマンス最適化: キャッシュ時間を延長
+    staleTime: 1000 * 60 * 10, // 10分間は新鮮とみなす
+    cacheTime: 1000 * 60 * 30, // 30分間メモリに保持
     refetchOnWindowFocus: false,
     refetchOnMount: false,
+    refetchOnReconnect: false,
   });
 
   // 各クリエイティブに紐づくタグID（フィルタ用）
   const { data: creativeTagRelations } =
     trpc.tags.getForUserCreatives.useQuery(undefined, {
-      staleTime: 1000 * 60 * 5,
+      // パフォーマンス最適化: キャッシュ時間を延長
+      staleTime: 1000 * 60 * 10, // 10分間は新鮮とみなす
+      cacheTime: 1000 * 60 * 30, // 30分間メモリに保持
       refetchOnWindowFocus: false,
       refetchOnMount: false,
+      refetchOnReconnect: false,
     });
   
   // 手動監視のクォータ状況を取得

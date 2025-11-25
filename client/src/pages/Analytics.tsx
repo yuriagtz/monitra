@@ -35,9 +35,12 @@ export default function Analytics() {
   >("changes");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const { data: landingPages } = trpc.landingPages.list.useQuery(undefined, {
-    staleTime: 1000 * 60 * 10,
+    // パフォーマンス最適化: キャッシュ時間を延長
+    staleTime: 1000 * 60 * 10, // 10分間は新鮮とみなす
+    cacheTime: 1000 * 60 * 30, // 30分間メモリに保持
     refetchOnWindowFocus: false,
     refetchOnMount: false,
+    refetchOnReconnect: false,
   });
   const { data: changeFrequency, isLoading: isLoadingFreq } = trpc.analytics.changeFrequency.useQuery(
     undefined,
@@ -60,9 +63,12 @@ export default function Analytics() {
 
   // クリエイティブ用データ
   const { data: creatives } = trpc.creatives.list.useQuery(undefined, {
-    staleTime: 1000 * 60 * 10,
+    // パフォーマンス最適化: キャッシュ時間を延長
+    staleTime: 1000 * 60 * 10, // 10分間は新鮮とみなす
+    cacheTime: 1000 * 60 * 30, // 30分間メモリに保持
     refetchOnWindowFocus: false,
     refetchOnMount: false,
+    refetchOnReconnect: false,
   });
   const {
     data: creativeChangeFrequency,

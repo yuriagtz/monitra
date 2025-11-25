@@ -236,6 +236,27 @@ export async function createCreative(data: InsertCreative) {
 export async function getCreativesByUserId(userId: number): Promise<Creative[]> {
   const db = await getDb();
   if (!db) return [];
+  
+  // パフォーマンス最適化: 必要なカラムのみ取得、更新日時でソート（最新順）
+  const creativesResult = await db
+    .select({
+      id: creatives.id,
+      userId: creatives.userId,
+      title: creatives.title,
+      imageUrl: creatives.imageUrl,
+      landingPageId: creatives.landingPageId,
+      targetUrl: creatives.targetUrl,
+      description: creatives.description,
+      createdAt: creatives.createdAt,
+      updatedAt: creatives.updatedAt,
+    })
+    .from(creatives)
+    .where(eq(creatives.userId, userId))
+    .orderBy(desc(creatives.updatedAt)); // 最新順にソート
+  
+  return creativesResult;
+  const db = await getDb();
+  if (!db) return [];
 
   const list = await db
     .select()

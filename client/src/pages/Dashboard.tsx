@@ -25,9 +25,12 @@ export default function Dashboard() {
   const planInfo = PLAN_CONFIG[userPlanKey];
 
   const { data: landingPages, isLoading: lpLoading } = trpc.landingPages.list.useQuery(undefined, {
-    staleTime: 1000 * 60 * 10, // 10分間キャッシュ
+    // パフォーマンス最適化: キャッシュ時間を延長
+    staleTime: 1000 * 60 * 10, // 10分間は新鮮とみなす
+    cacheTime: 1000 * 60 * 30, // 30分間メモリに保持
     refetchOnWindowFocus: false,
     refetchOnMount: false,
+    refetchOnReconnect: false,
   });
   const { data: recentHistory } = trpc.monitoring.recent.useQuery(
     { limit: 10 },
@@ -42,9 +45,12 @@ export default function Dashboard() {
   // クリエイティブ
   const { data: creatives, isLoading: creativesLoading } =
     trpc.creatives.list.useQuery(undefined, {
-      staleTime: 1000 * 60 * 10,
+      // パフォーマンス最適化: キャッシュ時間を延長
+      staleTime: 1000 * 60 * 10, // 10分間は新鮮とみなす
+      cacheTime: 1000 * 60 * 30, // 30分間メモリに保持
       refetchOnWindowFocus: false,
       refetchOnMount: false,
+      refetchOnReconnect: false,
     });
   const { data: recentCreativeHistory } =
     trpc.monitoring.creativeRecent.useQuery(

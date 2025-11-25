@@ -20,8 +20,22 @@ import { PLAN_CONFIG, getMinIntervalDays } from "@/_core/plan";
 
 export default function Schedules() {
   const { data: user } = trpc.auth.me.useQuery();
-  const { data: landingPages } = trpc.landingPages.list.useQuery();
-  const { data: creatives } = trpc.creatives.list.useQuery();
+  const { data: landingPages } = trpc.landingPages.list.useQuery(undefined, {
+    // パフォーマンス最適化: キャッシュ時間を延長
+    staleTime: 1000 * 60 * 10,
+    cacheTime: 1000 * 60 * 30,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+  });
+  const { data: creatives } = trpc.creatives.list.useQuery(undefined, {
+    // パフォーマンス最適化: キャッシュ時間を延長
+    staleTime: 1000 * 60 * 10,
+    cacheTime: 1000 * 60 * 30,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+  });
   const { data: schedules, refetch } = trpc.schedules.list.useQuery();
   const scheduleQuery = trpc.schedules.get.useQuery(undefined, {
     staleTime: 0, // キャッシュを使わずに常に最新を取得

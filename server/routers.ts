@@ -717,7 +717,14 @@ export const appRouter = router({
 
     // 現ユーザーの全クリエイティブに紐づくタグ一覧（フィルタ用）
     getForUserCreatives: protectedProcedure.query(async ({ ctx }) => {
-      return await db.getCreativeTagsByUserId(ctx.user.id);
+      const data = await db.getCreativeTagsByUserId(ctx.user.id);
+      
+      // パフォーマンス最適化: レスポンスヘッダーにキャッシュ設定
+      if (ctx.res) {
+        ctx.res.setHeader('Cache-Control', 'private, max-age=600, stale-while-revalidate=3600');
+      }
+      
+      return data;
     }),
 
     // 現ユーザーの全LPに紐づくタグ一覧（フィルタ用）
@@ -1084,7 +1091,14 @@ export const appRouter = router({
   creatives: router({
     // 一覧
     list: protectedProcedure.query(async ({ ctx }) => {
-      return await db.getCreativesByUserId(ctx.user.id);
+      const data = await db.getCreativesByUserId(ctx.user.id);
+      
+      // パフォーマンス最適化: レスポンスヘッダーにキャッシュ設定（Vercel Edge Cache）
+      if (ctx.res) {
+        ctx.res.setHeader('Cache-Control', 'private, max-age=600, stale-while-revalidate=3600');
+      }
+      
+      return data;
     }),
 
     // 追加
