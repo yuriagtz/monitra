@@ -1899,9 +1899,10 @@ export async function monitorCreative(creativeId: number): Promise<{
       
       // Download previous image (以前の最新画像)
       const previousResponse = await fetch(screenshotUrl);
-      const previousBuffer = Buffer.from(await previousResponse.arrayBuffer());
+      const arrayBuffer = await previousResponse.arrayBuffer();
+      const previousBuffer = Buffer.from(arrayBuffer) as Buffer;
       
-      // ハッシュ値を比較
+      // ハッシュ値を比較（PNG/JPGどちらでも比較可能）
       const prevHash = hashBuffer(previousBuffer);
       
       if (currentHash !== prevHash) {
@@ -1910,10 +1911,11 @@ export async function monitorCreative(creativeId: number): Promise<{
         message = "コンテンツ変更を検出";
         
         // 差分がある場合のみ、Storageに新しい画像を保存
+        // 容量削減のため、JPGで保存
         const timestamp = Date.now();
         const pngFileKey = `creatives/${creativeId}/${timestamp}.png`;
         
-        // 画像をJPEGに圧縮して保存
+        // 画像をJPEGに圧縮して保存（容量削減）
         const compressedImage = await compressImageToJpeg(imageBuffer, 80);
         const jpegFileKey = convertKeyToJpeg(pngFileKey);
         
@@ -1925,48 +1927,101 @@ export async function monitorCreative(creativeId: number): Promise<{
         );
         newImageUrl = result.url;
         
+        // 前回の画像もJPGで保存（容量削減）
+        // 既にJPGの場合はそのまま、PNGの場合はJPGに変換
+        if (previousImageUrl) {
+          const previousKey = extractStorageKeyFromUrl(previousImageUrl);
+          if (previousKey) {
+            // 既存のファイルがPNGかJPGかを確認
+            const isPreviousPng = previousKey.endsWith('.png');
+            if (isPreviousPng) {
+              // PNGの場合はJPGに変換して保存（容量削減）
+              // previousBufferは既に取得済みなので、そのままJPGに変換
+              const compressedPreviousImage = await compressImageToJpeg(previousBuffer, 80);
+              const previousJpegKey = convertKeyToJpeg(previousKey);
+              
+              // JPGで保存
+              const previousJpegResult = await storagePut(
+                previousJpegKey,
+                compressedPreviousImage,
+                "image/jpeg"
+              );
+              
+              // 古いPNGファイルを削除
+              await storageDelete(previousKey);
+              
+              // URLを更新
+              previousImageUrl = previousJpegResult.url;
+            }
+            // 既にJPGの場合はそのまま使用（URL変更不要）
+          }
+        }
+        
         // 差分が検出されたため、新しい画像が保存されました
       } else {
         // 画像が変更されていない場合
         contentChanged = false;
         message = "変更なし";
         
-        // 差分がない場合でも、最新の履歴の場合は画像を保存する
-        // 監視実行時は常に最新の履歴として扱う
+        // 差分がない場合：最新の画像をPNGで保存（次回の比較用）
+        // PNGのまま保存することで、次回の比較時に変換処理が不要（処理時間短縮）
         const timestamp = Date.now();
         const pngFileKey = `creatives/${creativeId}/${timestamp}.png`;
         
-        // 画像をJPEGに圧縮して保存
-        const compressedImage = await compressImageToJpeg(imageBuffer, 80);
-        const jpegFileKey = convertKeyToJpeg(pngFileKey);
+        // 画像がPNGかJPGかを確認
+        const isPng = imageBuffer.length >= 8 && 
+          imageBuffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]));
         
-        // Save new image to Storage (JPEG, 最新の履歴なので保存)
-        const result = await storagePut(
-          jpegFileKey,
-          compressedImage,
-          "image/jpeg"
-        );
-        newImageUrl = result.url;
+        if (isPng) {
+          // PNGの場合はそのまま保存
+          const result = await storagePut(
+            pngFileKey,
+            imageBuffer,
+            "image/png"
+          );
+          newImageUrl = result.url;
+        } else {
+          // JPGの場合はPNGに変換して保存（次回の比較用）
+          const pngImage = await convertImageToPng(imageBuffer);
+          const result = await storagePut(
+            pngFileKey,
+            pngImage,
+            "image/png"
+          );
+          newImageUrl = result.url;
+        }
       }
     }
   } else {
-    // 初回実行の場合は、変更があったものとして保存
+    // 初回実行の場合は、変更なしとして保存
+    // 次回の比較用にPNGで保存（処理時間短縮のため）
     contentChanged = false;
     message = "初回取得（基準画像を登録しました）";
     const timestamp = Date.now();
     const pngFileKey = `creatives/${creativeId}/${timestamp}.png`;
     
-    // 画像をJPEGに圧縮して保存
-    const compressedImage = await compressImageToJpeg(imageBuffer, 80);
-    const jpegFileKey = convertKeyToJpeg(pngFileKey);
+    // 画像がPNGかJPGかを確認
+    const isPng = imageBuffer.length >= 8 && 
+      imageBuffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]));
     
-    // Save new image to Storage (JPEG)
-    const result = await storagePut(
-      jpegFileKey,
-      compressedImage,
-      "image/jpeg"
-    );
-    newImageUrl = result.url;
+    if (isPng) {
+      // PNGの場合はそのまま保存
+      const result = await storagePut(
+        pngFileKey,
+        imageBuffer,
+        "image/png"
+      );
+      newImageUrl = result.url;
+    } else {
+      // JPGの場合はPNGに変換して保存（次回の比較用）
+      const pngImage = await convertImageToPng(imageBuffer);
+      const result = await storagePut(
+        pngFileKey,
+        pngImage,
+        "image/png"
+      );
+      newImageUrl = result.url;
+    }
     
     // 初回実行のため、新しい画像が保存されました
   }
