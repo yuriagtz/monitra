@@ -47,31 +47,82 @@ export async function getDb() {
   }
   
   if (!_db || !_client) {
-    try {
-      // Create postgres client
-      const dbUrl = process.env.DATABASE_URL;
-      // Mask password in logs for security
-      const maskedUrl = dbUrl.replace(/:([^:@]+)@/, ':****@');
-      console.log("[Database] Connecting to:", maskedUrl);
-      
-      _client = postgres(dbUrl, {
-        max: 10, // Connection pool size
-        idle_timeout: 20,
-        connect_timeout: 10,
-        transform: {
-          undefined: null, // Handle undefined values
-        },
-      });
-      _db = drizzle(_client);
-      
-      // Test connection
-      await _client`SELECT 1`;
-      console.log("[Database] Successfully connected to PostgreSQL");
-    } catch (error) {
-      console.error("[Database] Failed to initialize connection:", error);
-      console.error("[Database] DATABASE_URL format should be: postgresql://user:password@host:port/database");
-      _db = null;
-      _client = null;
+    const dbUrl = process.env.DATABASE_URL;
+    // Mask password in logs for security
+    const maskedUrl = dbUrl.replace(/:([^:@]+)@/, ':****@');
+    
+    // リトライロジック: 最大3回までリトライ
+    const maxRetries = 3;
+    const retryDelay = 1000; // 1秒
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`[Database] Connecting to: ${maskedUrl} (attempt ${attempt}/${maxRetries})`);
+        
+        // Vercel環境では接続タイムアウトを延長（サーバーレス環境のコールドスタートに対応）
+        const connectTimeout = process.env.VERCEL ? 30 : 15; // Vercel: 30秒、その他: 15秒
+        
+        _client = postgres(dbUrl, {
+          max: 10, // Connection pool size
+          idle_timeout: 20,
+          connect_timeout: connectTimeout, // タイムアウトを延長
+          transform: {
+            undefined: null, // Handle undefined values
+          },
+          // 接続プールの最適化設定
+          connection: {
+            application_name: 'monitra-server',
+          },
+        });
+        _db = drizzle(_client);
+        
+        // Test connection with timeout
+        await Promise.race([
+          _client`SELECT 1`,
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Connection test timeout')), connectTimeout * 1000)
+          ),
+        ]);
+        
+        console.log("[Database] Successfully connected to PostgreSQL");
+        return _db;
+      } catch (error: any) {
+        console.error(`[Database] Connection attempt ${attempt}/${maxRetries} failed:`, error.message);
+        
+        // 最後の試行でない場合はリトライ
+        if (attempt < maxRetries) {
+          console.log(`[Database] Retrying in ${retryDelay}ms...`);
+          
+          // 前回の接続をクリーンアップ
+          if (_client) {
+            try {
+              await Promise.race([
+                _client.end({ timeout: 5 }),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Cleanup timeout')), 5000)),
+              ]);
+            } catch (e) {
+              // クリーンアップエラーは無視（ログのみ）
+              console.warn("[Database] Cleanup warning (ignored):", (e as Error).message);
+            }
+          }
+          _db = null;
+          _client = null;
+          
+          // リトライ前に待機（指数バックオフ: 1秒、2秒、4秒）
+          const backoffDelay = retryDelay * Math.pow(2, attempt - 1);
+          await new Promise(resolve => setTimeout(resolve, backoffDelay));
+        } else {
+          // すべての試行が失敗した場合
+          console.error("[Database] Failed to initialize connection after all retries");
+          console.error("[Database] This may be due to:");
+          console.error("[Database] 1. Network connectivity issues");
+          console.error("[Database] 2. Supabase connection pooler being overloaded");
+          console.error("[Database] 3. Firewall or security group restrictions");
+          console.error("[Database] DATABASE_URL format should be: postgresql://user:password@host:port/database");
+          _db = null;
+          _client = null;
+        }
+      }
     }
   }
   return _db;
