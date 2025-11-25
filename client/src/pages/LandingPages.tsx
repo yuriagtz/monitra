@@ -124,10 +124,13 @@ export default function LandingPages() {
     { limit: landingPages?.length ? Math.max(landingPages.length * 10, 100) : 100 },
     {
       enabled: !!landingPages && !isLoading, // landingPagesが読み込まれてから実行
-      staleTime: 0, // キャッシュを使わずに常に最新を取得
-      refetchOnWindowFocus: true, // ウィンドウフォーカス時に再取得
-      refetchOnMount: true, // マウント時に再取得
-      refetchInterval: 30000, // 30秒ごとに自動更新
+      // パフォーマンス最適化: キャッシュ時間を設定（ステータスは比較的頻繁に更新されるため短め）
+      staleTime: 1000 * 30, // 30秒間は新鮮とみなす
+      cacheTime: 1000 * 60 * 5, // 5分間メモリに保持
+      refetchOnWindowFocus: false, // ウィンドウフォーカス時は再取得しない（キャッシュを使用）
+      refetchOnMount: false, // マウント時もキャッシュがあれば使用
+      refetchInterval: 60000, // 60秒ごとに自動更新（30秒から延長）
+      refetchOnReconnect: false, // 再接続時も再取得しない
     }
   );
 

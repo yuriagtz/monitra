@@ -6,7 +6,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "./db";
 import { getDb } from "./db";
-import { users, monitoringHistory, manualMonitoringQuota } from "../drizzle/schema";
+import { users, monitoringHistory, manualMonitoringQuota, landingPages } from "../drizzle/schema";
 import { eq, inArray, desc, and } from "drizzle-orm";
 import { monitorLandingPage, monitorCreative } from "./monitoring";
 import bcrypt from 'bcrypt';
@@ -1327,24 +1327,36 @@ export const appRouter = router({
       .input(z.object({ limit: z.number().optional() }))
       .query(async ({ ctx, input }) => {
         const limit = input.limit || 10;
-        // ユーザーが所有するLPのIDを取得
-        const userLandingPages = await db.getLandingPagesByUserId(ctx.user.id);
-        const userLandingPageIds = userLandingPages.map((landingPage) => landingPage.id);
         
-        if (userLandingPageIds.length === 0) {
-          return [];
-        }
-        
-        // ユーザーが所有するLPの監視履歴のみを取得
+        // パフォーマンス最適化: JOINを使用して1つのクエリで取得
         const dbInstance = await getDb();
         if (!dbInstance) return [];
         
-        return await dbInstance
-          .select()
+        const result = await dbInstance
+          .select({
+            id: monitoringHistory.id,
+            landingPageId: monitoringHistory.landingPageId,
+            creativeId: monitoringHistory.creativeId,
+            status: monitoringHistory.status,
+            checkType: monitoringHistory.checkType,
+            message: monitoringHistory.message,
+            screenshotUrl: monitoringHistory.screenshotUrl,
+            diffImageUrl: monitoringHistory.diffImageUrl,
+            createdAt: monitoringHistory.createdAt,
+            regionAnalysis: monitoringHistory.regionAnalysis,
+          })
           .from(monitoringHistory)
-          .where(inArray(monitoringHistory.landingPageId, userLandingPageIds))
+          .innerJoin(landingPages, eq(monitoringHistory.landingPageId, landingPages.id))
+          .where(eq(landingPages.userId, ctx.user.id))
           .orderBy(desc(monitoringHistory.createdAt))
           .limit(limit);
+        
+        // パフォーマンス最適化: レスポンスヘッダーにキャッシュ設定
+        if (ctx.res) {
+          ctx.res.setHeader('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
+        }
+        
+        return result;
       }),
 
     // クリエイティブ用の最近の監視履歴
