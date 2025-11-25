@@ -564,11 +564,12 @@ async function launchBrowser() {
     cleanupTempFiles();
   }
   
-  // タイムアウト付きでChromeパスを取得（Vercel環境では120秒、その他は180秒）
-  // Chrome 142のインストールには時間がかかるため、タイムアウトを延長
+  // タイムアウト付きでChromeパスを取得
+  // Vercel環境では、vercel.jsonでmaxDurationを300秒に設定しているため、それに合わせてタイムアウトを設定
+  // 実際の関数実行時間制限（300秒）より少し短く設定して、エラーハンドリングの時間を確保
   console.log("[Puppeteer] Getting Chrome executable path...");
   try {
-    const timeout = process.env.VERCEL ? 120000 : 180000;
+    const timeout = process.env.VERCEL ? 280000 : 180000; // Vercel: 280秒（約4.7分）、その他: 180秒（3分）
     const timeoutPromise = new Promise<undefined>((resolve) => {
       setTimeout(() => {
         console.warn(`[Puppeteer] Chrome path resolution timeout after ${timeout/1000}s`);
@@ -609,10 +610,37 @@ async function launchBrowser() {
   
   // Vercel環境では、executablePathが必須
   if (process.env.VERCEL && !executablePath) {
+    // より詳細なエラーメッセージを提供
+    console.error("[Puppeteer] ===== Chrome installation failed - Summary =====");
+    console.error("[Puppeteer] Cache directory:", process.env.PUPPETEER_CACHE_DIR || "/tmp/puppeteer");
+    console.error("[Puppeteer] Platform:", process.env.VERCEL ? "Vercel" : "Other");
+    console.error("[Puppeteer] Build ID override:", process.env.PUPPETEER_CHROME_BUILD_ID || "none");
+    
+    // キャッシュディレクトリの状態を確認
+    const cacheDir = process.env.PUPPETEER_CACHE_DIR || "/tmp/puppeteer";
+    try {
+      if (fs.existsSync(cacheDir)) {
+        const entries = fs.readdirSync(cacheDir, { withFileTypes: true });
+        console.error("[Puppeteer] Cache directory contents:", entries.map(e => `${e.isDirectory() ? '[DIR]' : '[FILE]'} ${e.name}`).join(", "));
+      } else {
+        console.error("[Puppeteer] Cache directory does not exist");
+      }
+    } catch (dirError: any) {
+      console.error("[Puppeteer] Failed to check cache directory:", dirError.message);
+    }
+    
     throw new Error(
       "Vercel環境でChromeのパスを取得できませんでした。" +
       "\nインストール処理が失敗した可能性があります。" +
-      "\nログを確認してください。"
+      "\nログを確認してください。" +
+      "\n\n考えられる原因:" +
+      "\n1. Chromeのインストールに時間がかかりすぎた（タイムアウト）" +
+      "\n2. ディスク容量不足" +
+      "\n3. ネットワークエラー" +
+      "\n4. 実行権限の問題" +
+      "\n\n解決策:" +
+      "\n- ログで詳細なエラー情報を確認" +
+      "\n- 必要に応じてPUPPETEER_CHROME_BUILD_ID環境変数で特定のビルドIDを指定"
     );
   }
   
