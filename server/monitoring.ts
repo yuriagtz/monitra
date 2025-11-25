@@ -195,8 +195,57 @@ export async function captureScreenshot(url: string): Promise<Buffer> {
 
 /**
  * Check if a URL is accessible (not broken)
+ * Vercel環境ではfetch APIを使用して軽量にチェック
  */
 export async function checkLinkStatus(url: string): Promise<{ ok: boolean; status?: number; error?: string }> {
+  // Vercel環境ではfetch APIを使用（Chrome不要、高速）
+  if (process.env.VERCEL) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒タイムアウト
+      
+      const response = await fetch(url, {
+        method: "HEAD", // HEADリクエストで軽量にチェック
+        signal: controller.signal,
+        redirect: "follow",
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; MonitraBot/1.0; +https://monitra.magitech-tool-lab.com)",
+        },
+      });
+      
+      clearTimeout(timeoutId);
+      const status = response.status;
+      return { ok: status >= 200 && status < 400, status };
+    } catch (error: any) {
+      // HEADが失敗した場合、GETで再試行
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        
+        const response = await fetch(url, {
+          method: "GET",
+          signal: controller.signal,
+          redirect: "follow",
+          headers: {
+            "User-Agent": "Mozilla/5.0 (compatible; MonitraBot/1.0; +https://monitra.magitech-tool-lab.com)",
+          },
+        });
+        
+        clearTimeout(timeoutId);
+        const status = response.status;
+        return { ok: status >= 200 && status < 400, status };
+      } catch (retryError: any) {
+        return { 
+          ok: false, 
+          error: retryError.name === "AbortError" 
+            ? "Request timeout" 
+            : retryError.message || String(retryError)
+        };
+      }
+    }
+  }
+  
+  // 非Vercel環境ではPuppeteerを使用（JavaScriptでリダイレクトするページもチェック可能）
   const browser = await launchBrowser();
 
   try {
