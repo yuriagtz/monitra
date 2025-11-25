@@ -169,10 +169,41 @@ async function installChromeIfNeeded(): Promise<string | undefined> {
       }, timeout);
     });
     
-    await Promise.race([installPromise, timeoutPromise]);
-    
-    const installDuration = ((Date.now() - installStartTime) / 1000).toFixed(1);
-    console.log(`[Puppeteer] Chrome installation completed in ${installDuration}s`);
+    try {
+      await Promise.race([installPromise, timeoutPromise]);
+      
+      const installDuration = ((Date.now() - installStartTime) / 1000).toFixed(1);
+      console.log(`[Puppeteer] Chrome installation completed in ${installDuration}s`);
+    } catch (installError: any) {
+      const elapsedTime = ((Date.now() - installStartTime) / 1000).toFixed(1);
+      
+      if (installError.message?.includes("timeout")) {
+        console.error(`[Puppeteer] Chrome installation timed out after ${elapsedTime}s`);
+        console.error(`[Puppeteer] Timeout limit: ${timeout/1000}s`);
+        console.error(`[Puppeteer] This may be due to slow network or large Chrome version (142+).`);
+        console.error(`[Puppeteer] Cache directory: ${cacheDir}`);
+        console.error(`[Puppeteer] Platform: ${platform}`);
+        console.error(`[Puppeteer] Build ID: ${buildId}`);
+        
+        // キャッシュディレクトリの状態を確認
+        try {
+          if (fs.existsSync(cacheDir)) {
+            const files = fs.readdirSync(cacheDir);
+            console.error(`[Puppeteer] Cache directory contents: ${files.join(", ")}`);
+          } else {
+            console.error(`[Puppeteer] Cache directory does not exist: ${cacheDir}`);
+          }
+        } catch (dirError: any) {
+          console.error(`[Puppeteer] Failed to check cache directory: ${dirError.message}`);
+        }
+        
+        throw installError;
+      } else {
+        console.error(`[Puppeteer] Chrome installation failed after ${elapsedTime}s:`, installError.message);
+        console.error(`[Puppeteer] Error stack:`, installError.stack);
+        throw installError;
+      }
+    }
 
     // インストールされたChromeの実行パスを取得
     const executablePath = computeExecutablePath({
@@ -182,21 +213,41 @@ async function installChromeIfNeeded(): Promise<string | undefined> {
       platform,
     });
 
+    console.log(`[Puppeteer] Checking installed Chrome at: ${executablePath}`);
+    
     if (fs.existsSync(executablePath)) {
+      const stats = fs.statSync(executablePath);
       console.log(`[Puppeteer] Chrome installed successfully: ${executablePath}`);
+      console.log(`[Puppeteer] Chrome file size: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
       return executablePath;
     } else {
       console.warn(`[Puppeteer] Chrome executable not found at: ${executablePath}`);
+      console.warn(`[Puppeteer] Cache directory: ${cacheDir}`);
+      console.warn(`[Puppeteer] Build ID: ${buildId}`);
+      console.warn(`[Puppeteer] Platform: ${platform}`);
+      
+      // キャッシュディレクトリの内容を確認
+      try {
+        if (fs.existsSync(cacheDir)) {
+          const files = fs.readdirSync(cacheDir);
+          console.warn(`[Puppeteer] Cache directory contents: ${files.join(", ")}`);
+          
+          const chromePath = path.join(cacheDir, "chrome");
+          if (fs.existsSync(chromePath)) {
+            const chromeDirs = fs.readdirSync(chromePath);
+            console.warn(`[Puppeteer] Chrome directory contents: ${chromeDirs.join(", ")}`);
+          }
+        }
+      } catch (dirError: any) {
+        console.warn(`[Puppeteer] Failed to check cache directory: ${dirError.message}`);
+      }
+      
       return undefined;
     }
   } catch (error: any) {
-    if (error.message?.includes("timeout")) {
-      console.error(`[Puppeteer] Chrome installation timed out: ${error.message}`);
-      console.error(`[Puppeteer] This may be due to slow network or large Chrome version (142+).`);
-      console.error(`[Puppeteer] Consider using an older Chrome version or increasing timeout.`);
-    } else {
-      console.error("[Puppeteer] Failed to install Chrome:", error.message);
-    }
+    console.error("[Puppeteer] Failed to install Chrome:", error.message);
+    console.error("[Puppeteer] Error type:", error.constructor.name);
+    console.error("[Puppeteer] Error stack:", error.stack);
     return undefined;
   }
 }
