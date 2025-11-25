@@ -15,10 +15,21 @@ import os from "os";
 let chromeInstallPromise: Promise<string | undefined> | null = null;
 
 // Vercel環境でのPuppeteerキャッシュパスを設定（一度だけ実行）
-if (process.env.VERCEL && !process.env.PUPPETEER_CACHE_DIR) {
-  // Vercel環境では/tmpディレクトリを使用
-  process.env.PUPPETEER_CACHE_DIR = "/tmp/puppeteer";
-  console.log("[Puppeteer] Set PUPPETEER_CACHE_DIR to /tmp/puppeteer for Vercel environment");
+// モジュール読み込み時に設定することで、Puppeteerが内部的に参照する前に設定される
+if (process.env.VERCEL) {
+  if (!process.env.PUPPETEER_CACHE_DIR) {
+    // Vercel環境では/tmpディレクトリを使用
+    process.env.PUPPETEER_CACHE_DIR = "/tmp/puppeteer";
+    console.log("[Puppeteer] Set PUPPETEER_CACHE_DIR to /tmp/puppeteer for Vercel environment");
+  } else {
+    console.log(`[Puppeteer] PUPPETEER_CACHE_DIR already set to: ${process.env.PUPPETEER_CACHE_DIR}`);
+  }
+  
+  // さらに、Puppeteerが使用する可能性のある他の環境変数も設定
+  if (!process.env.PUPPETEER_SKIP_CHROMIUM_DOWNLOAD) {
+    // Chromeを自動ダウンロードしないように設定（@puppeteer/browsersで管理）
+    process.env.PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true";
+  }
 }
 
 /**
@@ -266,10 +277,10 @@ async function launchBrowser() {
     cleanupTempFiles();
   }
   
-  // タイムアウト付きでChromeパスを取得（最大10秒 - インストール時間を考慮）
+  // タイムアウト付きでChromeパスを取得（最大30秒 - インストール時間を考慮）
   try {
     const timeoutPromise = new Promise<undefined>((resolve) => {
-      setTimeout(() => resolve(undefined), 10000);
+      setTimeout(() => resolve(undefined), 30000);
     });
     
     executablePath = await Promise.race([
@@ -278,6 +289,24 @@ async function launchBrowser() {
     ]);
   } catch (error: any) {
     console.warn(`[Puppeteer] Error getting Chrome path: ${error.message}`);
+  }
+  
+  // Vercel環境では、executablePathが取得できなかった場合でもインストールを試みる
+  if (process.env.VERCEL && !executablePath) {
+    console.log("[Puppeteer] Vercel environment: executablePath not found, attempting installation...");
+    if (!chromeInstallPromise) {
+      chromeInstallPromise = installChromeIfNeeded();
+    }
+    executablePath = await chromeInstallPromise;
+  }
+  
+  // Vercel環境では、executablePathが必須
+  if (process.env.VERCEL && !executablePath) {
+    throw new Error(
+      "Vercel環境でChromeのパスを取得できませんでした。" +
+      "\nインストール処理が失敗した可能性があります。" +
+      "\nログを確認してください。"
+    );
   }
   
   // ユーザーデータディレクトリを取得
@@ -305,14 +334,37 @@ async function launchBrowser() {
     ],
   };
   
-  // executablePathが指定されている場合のみ設定
+  // executablePathを必ず設定（Vercel環境では必須）
   if (executablePath) {
     launchOptions.executablePath = executablePath;
+    console.log(`[Puppeteer] Using Chrome executable: ${executablePath}`);
+  } else if (!process.env.VERCEL) {
+    // 非Vercel環境では、executablePathが未指定でもPuppeteerに自動検出を任せる
+    console.log("[Puppeteer] No explicit executablePath, letting Puppeteer auto-detect");
+  }
+  
+  // デバッグ情報をログに出力
+  if (process.env.VERCEL) {
+    console.log(`[Puppeteer] Launch options:`, {
+      executablePath: executablePath || "not set",
+      userDataDir,
+      PUPPETEER_CACHE_DIR: process.env.PUPPETEER_CACHE_DIR || "not set",
+      hasExecutablePath: !!executablePath,
+    });
   }
   
   try {
     return await puppeteer.launch(launchOptions);
   } catch (error: any) {
+    // エラーの詳細をログに出力
+    console.error(`[Puppeteer] Launch failed:`, {
+      error: error.message,
+      executablePath: executablePath || "not set",
+      userDataDir,
+      PUPPETEER_CACHE_DIR: process.env.PUPPETEER_CACHE_DIR || "not set",
+      VERCEL: process.env.VERCEL,
+    });
+    
     // ENOSPCエラーの場合、プロファイルディレクトリをクリーンアップして再試行
     if (error.message?.includes("ENOSPC") || error.message?.includes("no space left")) {
       console.warn(`[Puppeteer] Disk space error, cleaning up profile directory: ${error.message}`);
@@ -333,8 +385,28 @@ async function launchBrowser() {
       }
     }
     
-    // executablePathを指定した場合に失敗したら、executablePathなしで再試行
-    if (executablePath && error.message?.includes("Could not find Chrome")) {
+    // Vercel環境でChromeが見つからないエラーの場合、再インストールを試みる
+    if (process.env.VERCEL && error.message?.includes("Could not find Chrome")) {
+      console.warn(`[Puppeteer] Chrome not found in Vercel, attempting re-installation: ${error.message}`);
+      
+      // インストールプロミスをリセット
+      chromeInstallPromise = null;
+      
+      // 再インストールを試みる
+      try {
+        const reinstalledPath = await installChromeIfNeeded();
+        if (reinstalledPath && fs.existsSync(reinstalledPath)) {
+          console.log(`[Puppeteer] Chrome re-installed successfully: ${reinstalledPath}`);
+          launchOptions.executablePath = reinstalledPath;
+          return await puppeteer.launch(launchOptions);
+        }
+      } catch (reinstallError: any) {
+        console.error(`[Puppeteer] Re-installation failed: ${reinstallError.message}`);
+      }
+    }
+    
+    // executablePathを指定した場合に失敗したら、executablePathなしで再試行（非Vercel環境のみ）
+    if (executablePath && error.message?.includes("Could not find Chrome") && !process.env.VERCEL) {
       console.warn(`[Puppeteer] Failed with explicit path, retrying without executablePath: ${error.message}`);
       delete launchOptions.executablePath;
       try {
