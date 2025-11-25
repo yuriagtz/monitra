@@ -15,73 +15,70 @@ import os from "os";
  * Get Chrome executable path, with timeout and fallback
  */
 async function getChromeExecutablePath(): Promise<string | undefined> {
-  // まずPuppeteerのデフォルト実行パスを試す（最速）
-  try {
-    const defaultPath = await puppeteer.executablePath();
-    if (defaultPath && fs.existsSync(defaultPath)) {
-      console.log(`[Puppeteer] Using default Chrome path: ${defaultPath}`);
-      return defaultPath;
+  // 環境変数でChromeパスが指定されている場合はそれを使用
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    const envPath = process.env.PUPPETEER_EXECUTABLE_PATH;
+    if (fs.existsSync(envPath)) {
+      console.log(`[Puppeteer] Using Chrome from PUPPETEER_EXECUTABLE_PATH: ${envPath}`);
+      return envPath;
     }
-  } catch (error) {
-    console.warn("[Puppeteer] Could not get default executable path:", error);
   }
   
-  // Vercel環境では、システムChromeを探す
+  // Vercel環境では、まずシステムChromeを探す（Puppeteerのデフォルトパスは存在しないことが多い）
   if (process.env.VERCEL) {
     const systemPaths = [
       "/usr/bin/google-chrome",
       "/usr/bin/chromium",
       "/usr/bin/chromium-browser",
       "/usr/bin/chrome",
+      "/usr/bin/google-chrome-stable",
+      "/opt/google/chrome/chrome",
     ];
     
     for (const chromePath of systemPaths) {
-      if (fs.existsSync(chromePath)) {
-        console.log(`[Puppeteer] Using system Chrome: ${chromePath}`);
-        return chromePath;
+      try {
+        if (fs.existsSync(chromePath)) {
+          console.log(`[Puppeteer] Using system Chrome: ${chromePath}`);
+          return chromePath;
+        }
+      } catch (error) {
+        // ファイルアクセスエラーの場合は次のパスを試す
+        continue;
       }
     }
   }
   
-  // キャッシュされたChromeを探す（タイムアウト付きでインストールは試みない）
+  // Puppeteerのデフォルト実行パスを試す
   try {
-    const cacheDir = process.env.VERCEL ? "/tmp/.cache/puppeteer" : path.join(os.homedir(), ".cache", "puppeteer");
-    const platform = detectBrowserPlatform();
-    
-    if (platform) {
-      // 既存のキャッシュをチェック（インストールはしない）
-      const buildId = "142.0.7444.59"; // エラーメッセージにあったバージョン
-      const executablePath = computeExecutablePath({
-        browser: "chrome",
-        buildId,
-        cacheDir,
-        platform,
-      });
-      
-      if (fs.existsSync(executablePath)) {
-        console.log(`[Puppeteer] Using cached Chrome: ${executablePath}`);
-        return executablePath;
+    const defaultPath = await puppeteer.executablePath();
+    if (defaultPath) {
+      // パスが存在するか必ずチェック
+      if (fs.existsSync(defaultPath)) {
+        console.log(`[Puppeteer] Using default Chrome path: ${defaultPath}`);
+        return defaultPath;
+      } else {
+        console.warn(`[Puppeteer] Default path does not exist: ${defaultPath}`);
       }
     }
   } catch (error) {
-    console.warn("[Puppeteer] Could not find cached Chrome:", error);
+    console.warn("[Puppeteer] Could not get default executable path:", error);
   }
   
-  // 見つからない場合はundefinedを返す（デフォルトのlaunchを使用）
-  console.warn("[Puppeteer] Chrome not found in cache, using Puppeteer default");
+  // 見つからない場合はundefinedを返す（Puppeteerに自動検出を任せる）
+  console.warn("[Puppeteer] Chrome not found, letting Puppeteer use default behavior");
   return undefined;
 }
 
 /**
- * Launch browser with proper Chrome path (with timeout)
+ * Launch browser with proper Chrome path (with timeout and better error handling)
  */
 async function launchBrowser() {
   let executablePath: string | undefined;
   
-  // タイムアウト付きでChromeパスを取得（最大5秒）
+  // タイムアウト付きでChromeパスを取得（最大3秒）
   try {
     const timeoutPromise = new Promise<undefined>((resolve) => {
-      setTimeout(() => resolve(undefined), 5000);
+      setTimeout(() => resolve(undefined), 3000);
     });
     
     executablePath = await Promise.race([
@@ -89,12 +86,12 @@ async function launchBrowser() {
       timeoutPromise,
     ]);
   } catch (error: any) {
-    console.warn(`[Puppeteer] Error getting Chrome path (using default): ${error.message}`);
+    console.warn(`[Puppeteer] Error getting Chrome path: ${error.message}`);
   }
   
-  return await puppeteer.launch({
+  // launchオプションを構築
+  const launchOptions: Parameters<typeof puppeteer.launch>[0] = {
     headless: true,
-    executablePath,
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
@@ -106,7 +103,24 @@ async function launchBrowser() {
       "--disable-backgrounding-occluded-windows",
       "--disable-renderer-backgrounding",
     ],
-  });
+  };
+  
+  // executablePathが指定されている場合のみ設定
+  if (executablePath) {
+    launchOptions.executablePath = executablePath;
+  }
+  
+  try {
+    return await puppeteer.launch(launchOptions);
+  } catch (error: any) {
+    // executablePathを指定した場合に失敗したら、executablePathなしで再試行
+    if (executablePath && error.message?.includes("Could not find Chrome")) {
+      console.warn(`[Puppeteer] Failed with explicit path, retrying without executablePath: ${error.message}`);
+      delete launchOptions.executablePath;
+      return await puppeteer.launch(launchOptions);
+    }
+    throw error;
+  }
 }
 
 /**
