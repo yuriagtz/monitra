@@ -174,21 +174,24 @@ async function installChromeIfNeeded(): Promise<string | undefined> {
     }
 
     // ChromeのビルドIDを取得
-    // デフォルトでは常に最新版を使用（Chromeのアップデートに対応）
-    // 緊急時のみ環境変数PUPPETEER_CHROME_BUILD_IDで特定のビルドIDを指定可能
+    // 既存のChromeがあればそれを優先的に使用（インストール時間を節約）
+    // 既存のChromeがない場合のみ、最新版を取得してインストール
     let buildId: string | undefined;
     
     // 環境変数でビルドIDが指定されている場合はそれを使用（緊急時のフォールバック）
     if (process.env.PUPPETEER_CHROME_BUILD_ID) {
       buildId = process.env.PUPPETEER_CHROME_BUILD_ID;
       console.log(`[Puppeteer] Using Chrome build ID from environment (override): ${buildId}`);
-      console.log(`[Puppeteer] Note: This is an override. Remove PUPPETEER_CHROME_BUILD_ID to use latest Chrome.`);
+      console.log(`[Puppeteer] Note: This is an override. Remove PUPPETEER_CHROME_BUILD_ID to use existing or latest Chrome.`);
     } else {
-      // デフォルトでは常に最新版を使用
-      console.log("[Puppeteer] Resolving latest Chrome build ID...");
+      // 既存のChromeがない場合のみ、最新版を取得
+      // 既存のChromeがあれば、それをインストール済みとして使用するため、ここでは最新版を取得しない
+      // ただし、既存のChromeが見つからなかった場合は、最新版を取得してインストール
+      console.log("[Puppeteer] No existing Chrome found, resolving latest Chrome build ID for installation...");
       try {
         buildId = await resolveBuildId(Browser.CHROMIUM, platform, "latest");
         console.log(`[Puppeteer] Resolved latest Chrome build ID: ${buildId}`);
+        console.log(`[Puppeteer] Will install Chrome ${buildId} (this may take a few minutes)`);
       } catch (error: any) {
         console.error(`[Puppeteer] Failed to resolve latest Chrome: ${error.message}`);
         console.error(`[Puppeteer] If this persists, you can set PUPPETEER_CHROME_BUILD_ID as a temporary workaround`);
