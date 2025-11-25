@@ -69,7 +69,7 @@
     "pixelmatch": "^7.1.0",
     "pngjs": "^7.0.0",
     "puppeteer": "^24.27.0",
-    "@puppeteer/browsers": "^4.4.2",
+    "@puppeteer/browsers": "^2.10.13",
     "react": "^19.1.1",
     "react-day-picker": "^9.11.1",
     "react-dom": "^19.1.1",
