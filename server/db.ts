@@ -167,7 +167,20 @@ export async function getLandingPagesByUserId(userId: number) {
   const db = await getDb();
   if (!db) return [];
   
-  const landingPagesResult = await db.select().from(landingPages).where(eq(landingPages.userId, userId));
+  // パフォーマンス最適化: 必要なカラムのみ取得、更新日時でソート（最新順）
+  const landingPagesResult = await db
+    .select({
+      id: landingPages.id,
+      url: landingPages.url,
+      title: landingPages.title,
+      description: landingPages.description,
+      userId: landingPages.userId,
+      createdAt: landingPages.createdAt,
+      updatedAt: landingPages.updatedAt,
+    })
+    .from(landingPages)
+    .where(eq(landingPages.userId, userId))
+    .orderBy(desc(landingPages.updatedAt)); // 最新順にソート
   
   // タイトルがnullまたは空文字列の場合は「無題」に設定
   return landingPagesResult.map(landingPage => ({

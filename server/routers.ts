@@ -407,7 +407,15 @@ export const appRouter = router({
 
   landingPages: router({
     list: protectedProcedure.query(async ({ ctx }) => {
-      return await db.getLandingPagesByUserId(ctx.user.id);
+      const data = await db.getLandingPagesByUserId(ctx.user.id);
+      
+      // パフォーマンス最適化: レスポンスヘッダーにキャッシュ設定（Vercel Edge Cache）
+      // プライベートキャッシュ（ユーザー固有のデータのため）
+      if (ctx.res) {
+        ctx.res.setHeader('Cache-Control', 'private, max-age=600, stale-while-revalidate=3600');
+      }
+      
+      return data;
     }),
     
     create: protectedProcedure
@@ -646,7 +654,14 @@ export const appRouter = router({
   tags: router({
     list: protectedProcedure.query(async ({ ctx }) => {
       // LP用・クリエイティブ用すべてを返す（フロント側で種別ごとにフィルタ）
-      return await db.getTagsByUserId(ctx.user.id);
+      const data = await db.getTagsByUserId(ctx.user.id);
+      
+      // パフォーマンス最適化: レスポンスヘッダーにキャッシュ設定
+      if (ctx.res) {
+        ctx.res.setHeader('Cache-Control', 'private, max-age=600, stale-while-revalidate=3600');
+      }
+      
+      return data;
     }),
     
     create: protectedProcedure
@@ -707,7 +722,14 @@ export const appRouter = router({
 
     // 現ユーザーの全LPに紐づくタグ一覧（フィルタ用）
     getForUserLandingPages: protectedProcedure.query(async ({ ctx }) => {
-      return await db.getLandingPageTagsByUserId(ctx.user.id);
+      const data = await db.getLandingPageTagsByUserId(ctx.user.id);
+      
+      // パフォーマンス最適化: レスポンスヘッダーにキャッシュ設定
+      if (ctx.res) {
+        ctx.res.setHeader('Cache-Control', 'private, max-age=600, stale-while-revalidate=3600');
+      }
+      
+      return data;
     }),
 
     // クリエイティブにタグを付与

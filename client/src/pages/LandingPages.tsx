@@ -39,12 +39,15 @@ export default function LandingPages() {
 
   const utils = trpc.useUtils();
   const { data: landingPages, isLoading } = trpc.landingPages.list.useQuery(undefined, {
-    // このクエリは10分間キャッシュを使用（LPリストは頻繁に変わらない）
-    staleTime: 1000 * 60 * 10,
+    // パフォーマンス最適化: キャッシュ時間を延長
+    staleTime: 1000 * 60 * 10, // 10分間は新鮮とみなす
+    cacheTime: 1000 * 60 * 30, // 30分間メモリに保持
     // ウィンドウフォーカス時は再取得しない
     refetchOnWindowFocus: false,
     // マウント時もキャッシュがあれば使用
     refetchOnMount: false,
+    // ネットワーク再接続時も再取得しない（キャッシュを使用）
+    refetchOnReconnect: false,
   });
   const scheduleQuery = trpc.schedules.get.useQuery();
   const scheduleUpsert = trpc.schedules.upsert.useMutation({
@@ -66,18 +69,23 @@ export default function LandingPages() {
   const isAtLimit = maxLpCount !== null && currentLpCount >= maxLpCount;
   
   const { data: allTags } = trpc.tags.list.useQuery(undefined, {
-    // タグリストも10分間キャッシュ
-    staleTime: 1000 * 60 * 10,
+    // パフォーマンス最適化: キャッシュ時間を延長
+    staleTime: 1000 * 60 * 10, // 10分間は新鮮とみなす
+    cacheTime: 1000 * 60 * 30, // 30分間メモリに保持
     refetchOnWindowFocus: false,
     refetchOnMount: false,
+    refetchOnReconnect: false,
   });
 
   // 各LPに紐づくタグID（フィルタ用）
   const { data: lpTagRelations } =
     trpc.tags.getForUserLandingPages.useQuery(undefined, {
-      staleTime: 1000 * 60 * 5,
+      // パフォーマンス最適化: キャッシュ時間を延長
+      staleTime: 1000 * 60 * 10, // 10分間は新鮮とみなす
+      cacheTime: 1000 * 60 * 30, // 30分間メモリに保持
       refetchOnWindowFocus: false,
       refetchOnMount: false,
+      refetchOnReconnect: false,
     });
 
   const lpTagMap = useMemo(() => {
