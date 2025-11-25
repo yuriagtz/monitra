@@ -95,6 +95,31 @@ function checkExistingChrome(cacheDir: string, platform: any): string | undefine
 /**
  * Install Chrome using @puppeteer/browsers if not found
  */
+/**
+ * Check if Chrome is already installed in /tmp/puppeteer (from build time)
+ * Vercel環境では、ビルド時にインストールされたChromeが/tmp/puppeteerに存在する可能性がある
+ */
+function checkBuildTimeChrome(cacheDir: string, platform: any): string | undefined {
+  if (!process.env.VERCEL) {
+    return undefined;
+  }
+  
+  try {
+    console.log(`[Puppeteer] Checking for build-time Chrome in: ${cacheDir}`);
+    
+    // ビルド時にインストールされたChromeを探す
+    const existingChrome = checkExistingChrome(cacheDir, platform);
+    if (existingChrome) {
+      console.log(`[Puppeteer] Found build-time Chrome: ${existingChrome}`);
+      return existingChrome;
+    }
+  } catch (error: any) {
+    console.warn(`[Puppeteer] Failed to check build-time Chrome: ${error.message}`);
+  }
+  
+  return undefined;
+}
+
 async function installChromeIfNeeded(): Promise<string | undefined> {
   try {
     const platform = detectBrowserPlatform();
@@ -134,6 +159,14 @@ async function installChromeIfNeeded(): Promise<string | undefined> {
     }
 
     // 既存のChromeをチェック（インストール済みの場合は再利用）
+    // まず、ビルド時にインストールされたChromeをチェック
+    const buildTimeChrome = checkBuildTimeChrome(cacheDir, platform);
+    if (buildTimeChrome) {
+      console.log(`[Puppeteer] Using build-time Chrome: ${buildTimeChrome}`);
+      return buildTimeChrome;
+    }
+    
+    // 次に、実行時にインストールされたChromeをチェック
     const existingChrome = checkExistingChrome(cacheDir, platform);
     if (existingChrome) {
       console.log(`[Puppeteer] Using existing Chrome: ${existingChrome}`);
@@ -184,28 +217,30 @@ async function installChromeIfNeeded(): Promise<string | undefined> {
         }
       }
       
-      // 既存のChrome 141が見つからない場合、Chrome 141のビルドIDを取得してインストールを試みる
+      // 既存のChromeが見つからない場合、ChromeのビルドIDを取得してインストールを試みる
       if (!buildId) {
-        console.log(`[Puppeteer] Chrome 141 not found in cache, attempting to resolve Chrome 141 build ID...`);
+        // 環境変数でChromeバージョンが指定されている場合はそれを使用
+        const chromeVersion = process.env.PUPPETEER_CHROME_VERSION || "141";
+        console.log(`[Puppeteer] Chrome not found in cache, attempting to resolve Chrome ${chromeVersion} build ID...`);
         
-        // Chrome 141のバージョン番号から正確なビルドIDを取得
+        // Chromeのバージョン番号から正確なビルドIDを取得
         // 注意: resolveBuildIdはバージョン番号を直接受け付けない可能性があるため、
-        // まずは最新版を取得し、必要に応じて環境変数でビルドIDを指定する
+        // まずは指定されたバージョンを試し、失敗した場合は最新版を使用
         try {
-          // Chrome 141のビルドIDを取得を試みる
-          // バージョン番号 "141" を指定してみる
-          buildId = await resolveBuildId(Browser.CHROMIUM, platform, "141");
-          console.log(`[Puppeteer] Resolved Chrome 141 build ID: ${buildId}`);
+          // ChromeのビルドIDを取得を試みる
+          // バージョン番号（例: "141", "142"）を指定してみる
+          buildId = await resolveBuildId(Browser.CHROMIUM, platform, chromeVersion);
+          console.log(`[Puppeteer] Resolved Chrome ${chromeVersion} build ID: ${buildId}`);
         } catch (error: any) {
-          console.warn(`[Puppeteer] Failed to resolve Chrome 141 build ID: ${error.message}`);
+          console.warn(`[Puppeteer] Failed to resolve Chrome ${chromeVersion} build ID: ${error.message}`);
           console.warn(`[Puppeteer] Falling back to latest Chrome version...`);
           
-          // Chrome 141のビルドIDが取得できない場合、最新版を使用（フォールバック）
+          // 指定されたバージョンのビルドIDが取得できない場合、最新版を使用（フォールバック）
           try {
             buildId = await resolveBuildId(Browser.CHROMIUM, platform, "latest");
-            console.warn(`[Puppeteer] Using latest Chrome (${buildId}) instead of Chrome 141`);
-            console.warn(`[Puppeteer] To use Chrome 141, set PUPPETEER_CHROME_BUILD_ID environment variable`);
-            console.warn(`[Puppeteer] Find Chrome 141 build ID at: https://googlechromelabs.github.io/chrome-for-testing/`);
+            console.warn(`[Puppeteer] Using latest Chrome (${buildId}) instead of Chrome ${chromeVersion}`);
+            console.warn(`[Puppeteer] To use Chrome ${chromeVersion}, set PUPPETEER_CHROME_BUILD_ID environment variable`);
+            console.warn(`[Puppeteer] Find Chrome build ID at: https://googlechromelabs.github.io/chrome-for-testing/`);
           } catch (fallbackError: any) {
             console.error(`[Puppeteer] Failed to resolve latest Chrome: ${fallbackError.message}`);
             return undefined;
