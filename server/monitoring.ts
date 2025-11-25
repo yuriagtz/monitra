@@ -12,73 +12,84 @@ import fs from "fs";
 import os from "os";
 
 /**
- * Get Chrome executable path, installing if necessary
+ * Get Chrome executable path, with timeout and fallback
  */
-async function getChromeExecutablePath(): Promise<string> {
-  // Vercel環境では /tmp のみ書き込み可能
-  const cacheDir = process.env.VERCEL ? "/tmp/.cache/puppeteer" : path.join(os.homedir(), ".cache", "puppeteer");
-  
-  // キャッシュディレクトリを作成
-  if (!fs.existsSync(cacheDir)) {
-    fs.mkdirSync(cacheDir, { recursive: true });
+async function getChromeExecutablePath(): Promise<string | undefined> {
+  // まずPuppeteerのデフォルト実行パスを試す（最速）
+  try {
+    const defaultPath = await puppeteer.executablePath();
+    if (defaultPath && fs.existsSync(defaultPath)) {
+      console.log(`[Puppeteer] Using default Chrome path: ${defaultPath}`);
+      return defaultPath;
+    }
+  } catch (error) {
+    console.warn("[Puppeteer] Could not get default executable path:", error);
   }
   
-  try {
-    const platform = detectBrowserPlatform();
-    if (!platform) {
-      throw new Error("Could not detect browser platform");
+  // Vercel環境では、システムChromeを探す
+  if (process.env.VERCEL) {
+    const systemPaths = [
+      "/usr/bin/google-chrome",
+      "/usr/bin/chromium",
+      "/usr/bin/chromium-browser",
+      "/usr/bin/chrome",
+    ];
+    
+    for (const chromePath of systemPaths) {
+      if (fs.existsSync(chromePath)) {
+        console.log(`[Puppeteer] Using system Chrome: ${chromePath}`);
+        return chromePath;
+      }
     }
+  }
+  
+  // キャッシュされたChromeを探す（タイムアウト付きでインストールは試みない）
+  try {
+    const cacheDir = process.env.VERCEL ? "/tmp/.cache/puppeteer" : path.join(os.homedir(), ".cache", "puppeteer");
+    const platform = detectBrowserPlatform();
     
-    // 最新の安定版ChromeのビルドIDを取得
-    const buildId = await resolveBuildId("chrome", platform, "latest");
-    
-    // Chrome実行ファイルのパスを計算
-    const executablePath = computeExecutablePath({
-      browser: "chrome",
-      buildId,
-      cacheDir,
-      platform,
-    });
-    
-    // Chromeが存在するかチェック
-    if (!fs.existsSync(executablePath)) {
-      console.log(`[Puppeteer] Installing Chrome ${buildId} to ${cacheDir}...`);
-      await install({
+    if (platform) {
+      // 既存のキャッシュをチェック（インストールはしない）
+      const buildId = "142.0.7444.59"; // エラーメッセージにあったバージョン
+      const executablePath = computeExecutablePath({
         browser: "chrome",
         buildId,
         cacheDir,
         platform,
       });
-      console.log(`[Puppeteer] Chrome installed successfully at ${executablePath}`);
-    }
-    
-    return executablePath;
-  } catch (error: any) {
-    console.error("[Puppeteer] Error getting Chrome executable path:", error);
-    // フォールバック: Puppeteerのデフォルト実行パスを試す
-    try {
-      const defaultPath = await puppeteer.executablePath();
-      if (defaultPath && fs.existsSync(defaultPath)) {
-        return defaultPath;
+      
+      if (fs.existsSync(executablePath)) {
+        console.log(`[Puppeteer] Using cached Chrome: ${executablePath}`);
+        return executablePath;
       }
-    } catch (fallbackError) {
-      console.error("[Puppeteer] Fallback also failed:", fallbackError);
     }
-    throw new Error(`Could not get Chrome executable path: ${error.message}`);
+  } catch (error) {
+    console.warn("[Puppeteer] Could not find cached Chrome:", error);
   }
+  
+  // 見つからない場合はundefinedを返す（デフォルトのlaunchを使用）
+  console.warn("[Puppeteer] Chrome not found in cache, using Puppeteer default");
+  return undefined;
 }
 
 /**
- * Launch browser with proper Chrome path
+ * Launch browser with proper Chrome path (with timeout)
  */
 async function launchBrowser() {
   let executablePath: string | undefined;
   
+  // タイムアウト付きでChromeパスを取得（最大5秒）
   try {
-    executablePath = await getChromeExecutablePath();
+    const timeoutPromise = new Promise<undefined>((resolve) => {
+      setTimeout(() => resolve(undefined), 5000);
+    });
+    
+    executablePath = await Promise.race([
+      getChromeExecutablePath(),
+      timeoutPromise,
+    ]);
   } catch (error: any) {
-    console.warn(`[Puppeteer] Could not get explicit Chrome path: ${error.message}, using default`);
-    // フォールバック: デフォルトのlaunchを試す
+    console.warn(`[Puppeteer] Error getting Chrome path (using default): ${error.message}`);
   }
   
   return await puppeteer.launch({
