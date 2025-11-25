@@ -184,15 +184,33 @@ async function installChromeIfNeeded(): Promise<string | undefined> {
         }
       }
       
-      // 既存のChrome 141が見つからない場合、Chrome 141のビルドIDを直接インストールを試みる
+      // 既存のChrome 141が見つからない場合、Chrome 141のビルドIDを取得してインストールを試みる
       if (!buildId) {
-        console.log(`[Puppeteer] Chrome 141 not found in cache, attempting to install Chrome 141...`);
+        console.log(`[Puppeteer] Chrome 141 not found in cache, attempting to resolve Chrome 141 build ID...`);
         
-        // Chrome 141のビルドIDを直接指定してインストールを試みる
-        // 一般的なChrome 141のビルドIDを使用
-        buildId = "1541000"; // Chrome 141の一般的なビルドID（Linux x64）
-        console.log(`[Puppeteer] Will attempt to install Chrome 141 with build ID: ${buildId}`);
-        console.log(`[Puppeteer] Note: If this fails, set PUPPETEER_CHROME_BUILD_ID environment variable with correct build ID`);
+        // Chrome 141のバージョン番号から正確なビルドIDを取得
+        // 注意: resolveBuildIdはバージョン番号を直接受け付けない可能性があるため、
+        // まずは最新版を取得し、必要に応じて環境変数でビルドIDを指定する
+        try {
+          // Chrome 141のビルドIDを取得を試みる
+          // バージョン番号 "141" を指定してみる
+          buildId = await resolveBuildId(Browser.CHROMIUM, platform, "141");
+          console.log(`[Puppeteer] Resolved Chrome 141 build ID: ${buildId}`);
+        } catch (error: any) {
+          console.warn(`[Puppeteer] Failed to resolve Chrome 141 build ID: ${error.message}`);
+          console.warn(`[Puppeteer] Falling back to latest Chrome version...`);
+          
+          // Chrome 141のビルドIDが取得できない場合、最新版を使用（フォールバック）
+          try {
+            buildId = await resolveBuildId(Browser.CHROMIUM, platform, "latest");
+            console.warn(`[Puppeteer] Using latest Chrome (${buildId}) instead of Chrome 141`);
+            console.warn(`[Puppeteer] To use Chrome 141, set PUPPETEER_CHROME_BUILD_ID environment variable`);
+            console.warn(`[Puppeteer] Find Chrome 141 build ID at: https://googlechromelabs.github.io/chrome-for-testing/`);
+          } catch (fallbackError: any) {
+            console.error(`[Puppeteer] Failed to resolve latest Chrome: ${fallbackError.message}`);
+            return undefined;
+          }
+        }
       }
     } else {
       // その他の環境では最新版を使用（環境変数で指定可能）
