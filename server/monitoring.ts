@@ -49,16 +49,29 @@ function checkExistingChrome(cacheDir: string, platform: any): string | undefine
       }
     }
     
-    // 既存のChromeバージョンを探す（最新のものから順に）
-    const cachePath = path.join(cacheDir, "chrome");
-    
     if (!fs.existsSync(cacheDir)) {
       console.log(`[Puppeteer] Cache directory does not exist: ${cacheDir}`);
       return undefined;
     }
     
-    if (!fs.existsSync(cachePath)) {
-      console.log(`[Puppeteer] Chrome cache path does not exist: ${cachePath}`);
+    // 既存のChromeバージョンを探す（最新のものから順に）
+    // chrome と chromium の両方のディレクトリをチェック
+    const possibleCachePaths = [
+      path.join(cacheDir, "chrome"),
+      path.join(cacheDir, "chromium"),
+    ];
+    
+    let cachePath: string | undefined;
+    for (const possiblePath of possibleCachePaths) {
+      if (fs.existsSync(possiblePath)) {
+        cachePath = possiblePath;
+        console.log(`[Puppeteer] Found Chrome cache directory: ${cachePath}`);
+        break;
+      }
+    }
+    
+    if (!cachePath) {
+      console.log(`[Puppeteer] Chrome cache path does not exist (checked: ${possibleCachePaths.join(", ")})`);
       return undefined;
     }
     
@@ -85,14 +98,45 @@ function checkExistingChrome(cacheDir: string, platform: any): string | undefine
     console.log(`[Puppeteer] Found ${versions.length} Chrome version(s): ${versions.join(", ")}`);
     
     for (const version of versions) {
-      const executablePath = computeExecutablePath({
+      // computeExecutablePathは通常"chrome"ディレクトリを想定しているが、
+      // 実際には"chromium"ディレクトリが存在する場合があるため、両方を試す
+      let executablePath = computeExecutablePath({
         browser: Browser.CHROMIUM,
         buildId: version,
         cacheDir,
         platform,
       });
       
+      // もしcomputeExecutablePathが"chrome"を想定しているが、実際には"chromium"ディレクトリを使っている場合
+      // パスを調整して試す
+      if (!fs.existsSync(executablePath) && cachePath.includes("chromium")) {
+        // chromiumディレクトリを使っている場合、パスを調整
+        const adjustedPath = executablePath.replace(/\/chrome\//, "/chromium/");
+        if (fs.existsSync(adjustedPath)) {
+          executablePath = adjustedPath;
+          console.log(`[Puppeteer] Adjusted path for chromium directory: ${executablePath}`);
+        }
+      }
+      
       console.log(`[Puppeteer] Checking Chrome ${version} at: ${executablePath}`);
+      
+      // さらに、実際のディレクトリ構造に基づいて直接パスを構築して試す
+      if (!fs.existsSync(executablePath)) {
+        // 実際のディレクトリ構造に基づいてパスを構築
+        const versionDir = path.join(cachePath, version);
+        if (fs.existsSync(versionDir)) {
+          // プラットフォームに応じた実行ファイル名を取得
+          const executableName = platform === "linux" ? "chrome" : 
+                                 platform === "mac" ? "Chromium.app/Contents/MacOS/Chromium" :
+                                 "chrome.exe";
+          const directPath = path.join(versionDir, executableName);
+          
+          if (fs.existsSync(directPath)) {
+            executablePath = directPath;
+            console.log(`[Puppeteer] Found Chrome using direct path: ${executablePath}`);
+          }
+        }
+      }
       
       if (fs.existsSync(executablePath)) {
         // 実行権限を確認・設定
