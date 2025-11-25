@@ -14,6 +14,13 @@ import os from "os";
 // Chromeインストールのキャッシュ（一度だけインストールする）
 let chromeInstallPromise: Promise<string | undefined> | null = null;
 
+// Vercel環境でのPuppeteerキャッシュパスを設定（一度だけ実行）
+if (process.env.VERCEL && !process.env.PUPPETEER_CACHE_DIR) {
+  // Vercel環境では/tmpディレクトリを使用
+  process.env.PUPPETEER_CACHE_DIR = "/tmp/puppeteer";
+  console.log("[Puppeteer] Set PUPPETEER_CACHE_DIR to /tmp/puppeteer for Vercel environment");
+}
+
 /**
  * Install Chrome using @puppeteer/browsers if not found
  */
@@ -127,9 +134,27 @@ async function getChromeExecutablePath(): Promise<string | undefined> {
         continue;
       }
     }
+    
+    // Vercel環境では、puppeteer.executablePath()を呼ばずに、直接インストールを試みる
+    // （puppeteer.executablePath()は書き込み不可能なデフォルトパスを参照するため）
+    console.log("[Puppeteer] Vercel environment detected, attempting to install Chrome to /tmp...");
+    
+    // インストール処理は一度だけ実行されるようにキャッシュ
+    if (!chromeInstallPromise) {
+      chromeInstallPromise = installChromeIfNeeded();
+    }
+    
+    const installedPath = await chromeInstallPromise;
+    if (installedPath) {
+      return installedPath;
+    }
+    
+    // インストールも失敗した場合はundefinedを返す
+    console.warn("[Puppeteer] Chrome installation failed in Vercel environment");
+    return undefined;
   }
   
-  // Puppeteerのデフォルト実行パスを試す
+  // 非Vercel環境では、Puppeteerのデフォルト実行パスを試す
   try {
     const defaultPath = await puppeteer.executablePath();
     if (defaultPath) {
