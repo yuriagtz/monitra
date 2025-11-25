@@ -1,7 +1,8 @@
 -- パフォーマンス最適化のためのインデックス追加
--- landing_pagesテーブルのuserIdにインデックスを追加（LP一覧取得の高速化）
+-- 注意: PostgreSQLではカラム名の大文字小文字が区別されるため、引用符で囲む必要がある
 
-CREATE INDEX IF NOT EXISTS idx_landing_pages_userId ON landing_pages(userId);
+-- landing_pagesテーブルのuserIdにインデックスを追加（LP一覧取得の高速化）
+CREATE INDEX IF NOT EXISTS idx_landing_pages_userId ON landing_pages("userId");
 
 -- monitoring_historyテーブルのインデックス追加（履歴取得の高速化）
 CREATE INDEX IF NOT EXISTS idx_monitoring_history_landingPageId_createdAt ON monitoring_history(landing_page_id, created_at DESC);
