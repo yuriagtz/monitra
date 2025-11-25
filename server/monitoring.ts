@@ -1476,19 +1476,25 @@ export async function monitorLandingPage(landingPageId: number): Promise<{
       previousScreenshotUrl = screenshotUrl; // 以前の最新画像を保存
       
       // Download previous screenshot (以前の最新画像)
+      // 以前のスクリーンショットはPNGまたはJPGとして保存されている可能性がある
       const previousResponse = await fetch(screenshotUrl);
       const arrayBuffer = await previousResponse.arrayBuffer();
       let previousBuffer = Buffer.from(arrayBuffer) as Buffer;
       
-      // 以前のスクリーンショットはJPGとして保存されている可能性があるため、PNGに変換
-      // 比較処理はPNGを期待しているため、統一する必要がある
-      previousBuffer = await convertImageToPng(previousBuffer);
+      // 比較処理はPNGを期待しているため、JPGの場合はPNGに変換
+      // PNGの場合は変換不要（処理時間短縮）
+      const isPng = previousBuffer.length >= 8 && 
+        previousBuffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]));
       
-      // 新しいスクリーンショットもPNGに統一（念のため）
-      const newScreenshotPngBuffer = await convertImageToPng(newScreenshotBuffer);
+      if (!isPng) {
+        // JPGの場合はPNGに変換（比較処理用）
+        previousBuffer = await convertImageToPng(previousBuffer);
+      }
+      
+      // 新しいスクリーンショットは既にPNGなので変換不要
 
-      // Compare screenshots with region analysis
-      const comparison = await compareScreenshotsByFirstViewAndBody(previousBuffer, newScreenshotPngBuffer);
+      // Compare screenshots with region analysis (両方ともPNG)
+      const comparison = await compareScreenshotsByFirstViewAndBody(previousBuffer, newScreenshotBuffer);
       diffPercentage = comparison.overall;
       
       // Store region analysis
@@ -1503,10 +1509,11 @@ export async function monitorLandingPage(landingPageId: number): Promise<{
       contentChanged = true;
       
       // 差分がある場合のみ、Storageに新しいスクリーンショットと差分画像を保存
+      // 容量削減のため、JPGで保存
       const timestamp = Date.now();
       const pngFileKey = `screenshots/${landingPageId}/${timestamp}.png`;
       
-      // 画像をJPEGに圧縮して保存
+      // 現在のスクリーンショットをJPEGに圧縮して保存（容量削減）
       const compressedScreenshot = await compressImageToJpeg(newScreenshotBuffer, 80);
       const jpegFileKey = convertKeyToJpeg(pngFileKey);
       
@@ -1518,7 +1525,37 @@ export async function monitorLandingPage(landingPageId: number): Promise<{
       );
       newScreenshotUrl = result.url;
       
-      // Save diff image (差分画像も圧縮)
+      // 前回のスクリーンショットもJPGで保存（容量削減）
+      // 既にJPGの場合はそのまま、PNGの場合はJPGに変換
+      if (previousScreenshotUrl) {
+        const previousKey = extractStorageKeyFromUrl(previousScreenshotUrl);
+        if (previousKey) {
+          // 既存のファイルがPNGかJPGかを確認
+          const isPreviousPng = previousKey.endsWith('.png');
+          if (isPreviousPng) {
+            // PNGの場合はJPGに変換して保存（容量削減）
+            // previousBufferは既にPNGに変換済みなので、そのままJPGに変換
+            const compressedPreviousScreenshot = await compressImageToJpeg(previousBuffer, 80);
+            const previousJpegKey = convertKeyToJpeg(previousKey);
+            
+            // JPGで保存
+            const previousJpegResult = await storagePut(
+              previousJpegKey,
+              compressedPreviousScreenshot,
+              "image/jpeg"
+            );
+            
+            // 古いPNGファイルを削除
+            await storageDelete(previousKey);
+            
+            // URLを更新
+            previousScreenshotUrl = previousJpegResult.url;
+          }
+          // 既にJPGの場合はそのまま使用（URL変更不要）
+        }
+      }
+      
+      // Save diff image (差分画像もJPGで圧縮、容量削減)
       if (comparison.diffImageBuffer) {
         const diffPngFileKey = `screenshots/${landingPageId}/${timestamp}_diff.png`;
         const compressedDiffImage = await compressImageToJpeg(comparison.diffImageBuffer, 75); // 差分画像は少し品質を下げる
@@ -1535,40 +1572,33 @@ export async function monitorLandingPage(landingPageId: number): Promise<{
       // 差分が検出されたため、新しいスクリーンショットが保存されました
       // （screenshotsテーブルは使用しないため、更新処理は不要）
     } else {
-      // 差分がない場合でも、最新の履歴の場合は画像を保存する
-      // 監視実行時は常に最新の履歴として扱う
+      // 差分がない場合：最新のスクリーンショットをPNGで保存（次回の比較用）
+      // PNGのまま保存することで、次回の比較時に変換処理が不要（処理時間短縮）
       const timestamp = Date.now();
       const pngFileKey = `screenshots/${landingPageId}/${timestamp}.png`;
       
-      // 画像をJPEGに圧縮して保存
-      const compressedScreenshot = await compressImageToJpeg(newScreenshotBuffer, 80);
-      const jpegFileKey = convertKeyToJpeg(pngFileKey);
-      
-      // Save new screenshot to Storage (JPEG, 最新の履歴なので保存)
+      // Save new screenshot to Storage (PNG, 比較用なのでPNGのまま)
       const result = await storagePut(
-        jpegFileKey,
-        compressedScreenshot,
-        "image/jpeg"
+        pngFileKey,
+        newScreenshotBuffer,
+        "image/png"
       );
       newScreenshotUrl = result.url;
       // 差分がない場合は、screenshotsテーブルへの更新は不要
       }
     }
   } else {
-    // 初回実行の場合は、変更なしとして保存（クリエイティブと統一）
+    // 初回実行の場合は、変更なしとして保存
+    // 次回の比較用にPNGで保存（処理時間短縮のため）
     contentChanged = false;
     const timestamp = Date.now();
     const pngFileKey = `screenshots/${landingPageId}/${timestamp}.png`;
     
-    // 画像をJPEGに圧縮して保存
-    const compressedScreenshot = await compressImageToJpeg(newScreenshotBuffer, 80);
-    const jpegFileKey = convertKeyToJpeg(pngFileKey);
-    
-    // Save new screenshot to Storage (JPEG)
+    // Save new screenshot to Storage (PNG, 比較用なのでPNGのまま)
     const result = await storagePut(
-      jpegFileKey,
-      compressedScreenshot,
-      "image/jpeg"
+      pngFileKey,
+      newScreenshotBuffer,
+      "image/png"
     );
     newScreenshotUrl = result.url;
     
