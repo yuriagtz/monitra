@@ -45,6 +45,12 @@ Vercelのダッシュボードで以下の環境変数を設定してくださ�
   - ビルドIDは [Chrome for Testing](https://googlechromelabs.github.io/chrome-for-testing/) で確認できます
   - **注意**: この環境変数を設定すると、Chromeのアップデートに対応できなくなります
 
+## 関数実行時間の設定
+
+`vercel.json` で関数の実行時間を300秒（5分）に設定しています。これは、Chromeのインストールに十分な時間を確保するためです。
+
+**注意**: Vercel Proプランでは最大300秒まで設定可能です。Hobbyプランでは60秒が上限です。
+
 ## ルーティングとCron設定
 
 `vercel.json` にはサーバーレスハンドラーとCron設定が含まれています。

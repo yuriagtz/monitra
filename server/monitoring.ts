@@ -203,9 +203,9 @@ async function installChromeIfNeeded(): Promise<string | undefined> {
     console.log(`[Puppeteer] Resolved Chrome build ID: ${buildId}`);
 
     // インストール処理にタイムアウトを設定
-    // Vercel環境では60秒（関数実行時間制限を考慮）、その他は180秒
-    // Chromeのインストールには時間がかかる可能性がある
-    const timeout = process.env.VERCEL ? 60000 : 180000;
+    // Vercel環境では、vercel.jsonでmaxDurationを300秒に設定しているため、それに合わせてタイムアウトを設定
+    // 実際の関数実行時間制限（300秒）より少し短く設定して、エラーハンドリングの時間を確保
+    const timeout = process.env.VERCEL ? 280000 : 180000; // Vercel: 280秒（約4.7分）、その他: 180秒（3分）
     const installStartTime = Date.now();
     
     console.log(`[Puppeteer] Installing Chrome ${buildId} to ${cacheDir}... (timeout: ${timeout/1000}s)`);

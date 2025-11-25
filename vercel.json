@@ -4,7 +4,8 @@
   "buildCommand": "pnpm run build",
   "functions": {
     "api/index.ts": {
-      "includeFiles": "dist/**"
+      "includeFiles": "dist/**",
+      "maxDuration": 300
     }
   },
   "routes": [
