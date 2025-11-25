@@ -205,6 +205,8 @@ async function installChromeIfNeeded(): Promise<string | undefined> {
  * Get Chrome executable path, with timeout and fallback
  */
 async function getChromeExecutablePath(): Promise<string | undefined> {
+  console.log("[Puppeteer] getChromeExecutablePath() called");
+  
   // 環境変数でChromeパスが指定されている場合はそれを使用
   if (process.env.PUPPETEER_EXECUTABLE_PATH) {
     const envPath = process.env.PUPPETEER_EXECUTABLE_PATH;
@@ -375,15 +377,18 @@ function cleanupTempFiles() {
  * Launch browser with proper Chrome path (with timeout and better error handling)
  */
 async function launchBrowser() {
+  console.log("[Puppeteer] Launching browser...");
   let executablePath: string | undefined;
   
   // Vercel環境では古い一時ファイルをクリーンアップ
   if (process.env.VERCEL) {
+    console.log("[Puppeteer] Vercel environment detected, cleaning up temp files...");
     cleanupTempFiles();
   }
   
   // タイムアウト付きでChromeパスを取得（Vercel環境では120秒、その他は180秒）
   // Chrome 142のインストールには時間がかかるため、タイムアウトを延長
+  console.log("[Puppeteer] Getting Chrome executable path...");
   try {
     const timeout = process.env.VERCEL ? 120000 : 180000;
     const timeoutPromise = new Promise<undefined>((resolve) => {
@@ -397,6 +402,12 @@ async function launchBrowser() {
       getChromeExecutablePath(),
       timeoutPromise,
     ]);
+    
+    if (executablePath) {
+      console.log(`[Puppeteer] Chrome executable path obtained: ${executablePath}`);
+    } else {
+      console.warn("[Puppeteer] Chrome executable path not obtained (timeout or error)");
+    }
   } catch (error: any) {
     console.warn(`[Puppeteer] Error getting Chrome path: ${error.message}`);
   }
@@ -405,9 +416,17 @@ async function launchBrowser() {
   if (process.env.VERCEL && !executablePath) {
     console.log("[Puppeteer] Vercel environment: executablePath not found, attempting installation...");
     if (!chromeInstallPromise) {
+      console.log("[Puppeteer] Starting Chrome installation...");
       chromeInstallPromise = installChromeIfNeeded();
+    } else {
+      console.log("[Puppeteer] Chrome installation already in progress, waiting...");
     }
     executablePath = await chromeInstallPromise;
+    if (executablePath) {
+      console.log(`[Puppeteer] Chrome installation completed: ${executablePath}`);
+    } else {
+      console.error("[Puppeteer] Chrome installation failed or returned undefined");
+    }
   }
   
   // Vercel環境では、executablePathが必須
