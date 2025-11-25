@@ -140,9 +140,78 @@ async function installChromeIfNeeded(): Promise<string | undefined> {
       return existingChrome;
     }
 
-    // Chromeの最新ビルドIDを取得
-    console.log("[Puppeteer] Resolving Chrome build ID...");
-    const buildId = await resolveBuildId(Browser.CHROMIUM, platform, "latest");
+    // ChromeのビルドIDを取得
+    // Vercel環境ではChrome 141のビルドIDを指定（環境変数で上書き可能）
+    // その他の環境では最新版を使用（環境変数で上書き可能）
+    let buildId: string | undefined;
+    
+    // 環境変数でビルドIDが指定されている場合はそれを使用
+    if (process.env.PUPPETEER_CHROME_BUILD_ID) {
+      buildId = process.env.PUPPETEER_CHROME_BUILD_ID;
+      console.log(`[Puppeteer] Using Chrome build ID from environment: ${buildId}`);
+    } else if (process.env.VERCEL) {
+      // Vercel環境ではデフォルトでChrome 141のビルドIDを使用
+      // Chrome 141のビルドID（Linux x64）: 約1540000-1541000の範囲
+      // 一般的なChrome 141のビルドIDを試行（プラットフォームに応じて調整）
+      console.log("[Puppeteer] Vercel environment: Attempting to use Chrome 141...");
+      
+      // Chrome 141のビルドIDを試行（一般的なLinux x64のビルドID）
+      // 注意: 正確なビルドIDはプラットフォームによって異なるため、
+      // 環境変数 PUPPETEER_CHROME_BUILD_ID で指定することを推奨
+      const chrome141BuildIds = [
+        "1541000", // Chrome 141の一般的なビルドID（Linux x64）
+        "1540000", // より古いChrome 141のビルドID
+        "1540500", // 中間のビルドID
+      ];
+      
+      // 各ビルドIDを試行
+      for (const testBuildId of chrome141BuildIds) {
+        try {
+          // ビルドIDが有効かどうかを確認（computeExecutablePathでパスを生成してみる）
+          const testPath = computeExecutablePath({
+            browser: Browser.CHROMIUM,
+            buildId: testBuildId,
+            cacheDir,
+            platform,
+          });
+          
+          // キャッシュに既に存在する場合はそれを使用
+          if (fs.existsSync(testPath)) {
+            buildId = testBuildId;
+            console.log(`[Puppeteer] Found existing Chrome 141 build ID: ${buildId}`);
+            break;
+          }
+        } catch (error) {
+          // ビルドIDが無効な場合は次のを試す
+          continue;
+        }
+      }
+      
+      // 既存のChrome 141が見つからない場合、最新版を使用（フォールバック）
+      if (!buildId) {
+        console.warn(`[Puppeteer] Chrome 141 not found in cache, using latest version as fallback`);
+        console.warn(`[Puppeteer] To use Chrome 141, set PUPPETEER_CHROME_BUILD_ID environment variable`);
+        console.warn(`[Puppeteer] Example: PUPPETEER_CHROME_BUILD_ID=1541000`);
+        try {
+          buildId = await resolveBuildId(Browser.CHROMIUM, platform, "latest");
+        } catch (error: any) {
+          console.error(`[Puppeteer] Failed to resolve latest Chrome: ${error.message}`);
+          return undefined;
+        }
+      }
+    } else {
+      // その他の環境では最新版を使用（環境変数で指定可能）
+      const chromeVersion = process.env.PUPPETEER_CHROME_VERSION || "latest";
+      console.log(`[Puppeteer] Resolving Chrome build ID for version: ${chromeVersion}...`);
+      
+      try {
+        buildId = await resolveBuildId(Browser.CHROMIUM, platform, chromeVersion);
+      } catch (error: any) {
+        console.warn(`[Puppeteer] Failed to resolve Chrome ${chromeVersion}: ${error.message}`);
+        return undefined;
+      }
+    }
+    
     if (!buildId) {
       console.warn("[Puppeteer] Could not resolve Chrome build ID");
       return undefined;
@@ -1113,25 +1182,28 @@ export async function monitorLandingPage(landingPageId: number): Promise<{
   // 以前の最新履歴の画像がある場合は比較を行う
   if (previousLatestHistory.length > 0 && previousLatestHistory[0].screenshotUrl) {
     const previousHistory = previousLatestHistory[0];
-    previousScreenshotUrl = previousHistory.screenshotUrl; // 以前の最新画像を保存
-    
-    // Download previous screenshot (以前の最新画像)
-    const previousResponse = await fetch(previousHistory.screenshotUrl);
-    const previousBuffer = Buffer.from(await previousResponse.arrayBuffer());
+    const screenshotUrl = previousHistory.screenshotUrl;
+    // if文の条件で既にscreenshotUrlが存在することをチェックしているため、nullではない
+    if (screenshotUrl) {
+      previousScreenshotUrl = screenshotUrl; // 以前の最新画像を保存
+      
+      // Download previous screenshot (以前の最新画像)
+      const previousResponse = await fetch(screenshotUrl);
+      const previousBuffer = Buffer.from(await previousResponse.arrayBuffer());
 
-    // Compare screenshots with region analysis
-    const comparison = await compareScreenshotsByFirstViewAndBody(previousBuffer, newScreenshotBuffer);
-    diffPercentage = comparison.overall;
-    
-    // Store region analysis
-    regionAnalysisResult = {
-      firstView: comparison.firstView,
-      body: comparison.body,
-      analysis: comparison.analysis
-    };
-    
-    // Consider changed if difference is more than 3%
-    if (diffPercentage > 3) {
+      // Compare screenshots with region analysis
+      const comparison = await compareScreenshotsByFirstViewAndBody(previousBuffer, newScreenshotBuffer);
+      diffPercentage = comparison.overall;
+      
+      // Store region analysis
+      regionAnalysisResult = {
+        firstView: comparison.firstView,
+        body: comparison.body,
+        analysis: comparison.analysis
+      };
+      
+      // Consider changed if difference is more than 3%
+      if (diffPercentage > 3) {
       contentChanged = true;
       
       // 差分がある場合のみ、Storageに新しいスクリーンショットと差分画像を保存
@@ -1184,6 +1256,7 @@ export async function monitorLandingPage(landingPageId: number): Promise<{
       );
       newScreenshotUrl = result.url;
       // 差分がない場合は、screenshotsテーブルへの更新は不要
+      }
     }
   } else {
     // 初回実行の場合は、変更なしとして保存（クリエイティブと統一）
@@ -1493,58 +1566,62 @@ export async function monitorCreative(creativeId: number): Promise<{
   // 以前の最新履歴の画像がある場合は比較を行う
   if (previousLatestHistory.length > 0 && previousLatestHistory[0].screenshotUrl) {
     const previousHistory = previousLatestHistory[0];
-    previousImageUrl = previousHistory.screenshotUrl; // 以前の最新画像を保存
-    
-    // Download previous image (以前の最新画像)
-    const previousResponse = await fetch(previousHistory.screenshotUrl);
-    const previousBuffer = Buffer.from(await previousResponse.arrayBuffer());
-    
-    // ハッシュ値を比較
-    const prevHash = hashBuffer(previousBuffer);
-    
-    if (currentHash !== prevHash) {
-      // 画像が変更された場合
-      contentChanged = true;
-      message = "コンテンツ変更を検出";
+    const screenshotUrl = previousHistory.screenshotUrl;
+    // if文の条件で既にscreenshotUrlが存在することをチェックしているため、nullではない
+    if (screenshotUrl) {
+      previousImageUrl = screenshotUrl; // 以前の最新画像を保存
       
-      // 差分がある場合のみ、Storageに新しい画像を保存
-      const timestamp = Date.now();
-      const pngFileKey = `creatives/${creativeId}/${timestamp}.png`;
+      // Download previous image (以前の最新画像)
+      const previousResponse = await fetch(screenshotUrl);
+      const previousBuffer = Buffer.from(await previousResponse.arrayBuffer());
       
-      // 画像をJPEGに圧縮して保存
-      const compressedImage = await compressImageToJpeg(imageBuffer, 80);
-      const jpegFileKey = convertKeyToJpeg(pngFileKey);
+      // ハッシュ値を比較
+      const prevHash = hashBuffer(previousBuffer);
       
-      // Save new image to Storage (JPEG)
-      const result = await storagePut(
-        jpegFileKey,
-        compressedImage,
-        "image/jpeg"
-      );
-      newImageUrl = result.url;
-      
-      // 差分が検出されたため、新しい画像が保存されました
-    } else {
-      // 画像が変更されていない場合
-      contentChanged = false;
-      message = "変更なし";
-      
-      // 差分がない場合でも、最新の履歴の場合は画像を保存する
-      // 監視実行時は常に最新の履歴として扱う
-      const timestamp = Date.now();
-      const pngFileKey = `creatives/${creativeId}/${timestamp}.png`;
-      
-      // 画像をJPEGに圧縮して保存
-      const compressedImage = await compressImageToJpeg(imageBuffer, 80);
-      const jpegFileKey = convertKeyToJpeg(pngFileKey);
-      
-      // Save new image to Storage (JPEG, 最新の履歴なので保存)
-      const result = await storagePut(
-        jpegFileKey,
-        compressedImage,
-        "image/jpeg"
-      );
-      newImageUrl = result.url;
+      if (currentHash !== prevHash) {
+        // 画像が変更された場合
+        contentChanged = true;
+        message = "コンテンツ変更を検出";
+        
+        // 差分がある場合のみ、Storageに新しい画像を保存
+        const timestamp = Date.now();
+        const pngFileKey = `creatives/${creativeId}/${timestamp}.png`;
+        
+        // 画像をJPEGに圧縮して保存
+        const compressedImage = await compressImageToJpeg(imageBuffer, 80);
+        const jpegFileKey = convertKeyToJpeg(pngFileKey);
+        
+        // Save new image to Storage (JPEG)
+        const result = await storagePut(
+          jpegFileKey,
+          compressedImage,
+          "image/jpeg"
+        );
+        newImageUrl = result.url;
+        
+        // 差分が検出されたため、新しい画像が保存されました
+      } else {
+        // 画像が変更されていない場合
+        contentChanged = false;
+        message = "変更なし";
+        
+        // 差分がない場合でも、最新の履歴の場合は画像を保存する
+        // 監視実行時は常に最新の履歴として扱う
+        const timestamp = Date.now();
+        const pngFileKey = `creatives/${creativeId}/${timestamp}.png`;
+        
+        // 画像をJPEGに圧縮して保存
+        const compressedImage = await compressImageToJpeg(imageBuffer, 80);
+        const jpegFileKey = convertKeyToJpeg(pngFileKey);
+        
+        // Save new image to Storage (JPEG, 最新の履歴なので保存)
+        const result = await storagePut(
+          jpegFileKey,
+          compressedImage,
+          "image/jpeg"
+        );
+        newImageUrl = result.url;
+      }
     }
   } else {
     // 初回実行の場合は、変更があったものとして保存
