@@ -14,7 +14,7 @@ const cacheDir = process.env.VERCEL
   : path.join(projectRoot, ".cache", "puppeteer");
 
 async function installChrome() {
-  console.log("[Build] Installing Chrome 142...");
+  console.log("[Build] Installing latest Chrome...");
   console.log(`[Build] Cache directory: ${cacheDir}`);
   
   try {
@@ -25,20 +25,10 @@ async function installChrome() {
     
     console.log(`[Build] Platform: ${platform}`);
     
-    // Chrome 142のビルドIDを取得
-    console.log("[Build] Resolving Chrome 142 build ID...");
-    let buildId;
-    
-    try {
-      // バージョン番号 "142" を指定してビルドIDを取得
-      buildId = await resolveBuildId(Browser.CHROMIUM, platform, "142");
-      console.log(`[Build] Resolved Chrome 142 build ID: ${buildId}`);
-    } catch (error) {
-      console.warn(`[Build] Failed to resolve Chrome 142, trying latest: ${error.message}`);
-      // Chrome 142が取得できない場合、最新版を取得
-      buildId = await resolveBuildId(Browser.CHROMIUM, platform, "latest");
-      console.log(`[Build] Using latest Chrome build ID: ${buildId}`);
-    }
+    // 最新のChromeのビルドIDを取得（常に最新版を使用）
+    console.log("[Build] Resolving latest Chrome build ID...");
+    const buildId = await resolveBuildId(Browser.CHROMIUM, platform, "latest");
+    console.log(`[Build] Resolved latest Chrome build ID: ${buildId}`);
     
     // キャッシュディレクトリが存在しない場合は作成
     if (!fs.existsSync(cacheDir)) {

@@ -39,6 +39,12 @@ Vercelのダッシュボードで以下の環境変数を設定してくださ�
   - 例: `Asia/Tokyo`, `America/New_York`, `Europe/London`
   - タイムゾーン名の一覧: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
 
+- `PUPPETEER_CHROME_BUILD_ID`: ChromeのビルドID（緊急時のフォールバックのみ）
+  - **通常は設定不要**。デフォルトでは常に最新版のChromeを使用します
+  - Chromeのインストールに問題が発生した場合のみ、特定のビルドIDを指定してください
+  - ビルドIDは [Chrome for Testing](https://googlechromelabs.github.io/chrome-for-testing/) で確認できます
+  - **注意**: この環境変数を設定すると、Chromeのアップデートに対応できなくなります
+
 ## ルーティングとCron設定
 
 `vercel.json` にはサーバーレスハンドラーとCron設定が含まれています。
