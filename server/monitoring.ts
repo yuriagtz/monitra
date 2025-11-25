@@ -37,30 +37,57 @@ if (process.env.VERCEL) {
  */
 function checkExistingChrome(cacheDir: string, platform: any): string | undefined {
   try {
+    console.log(`[Puppeteer] Checking for existing Chrome in: ${cacheDir}`);
+    
     // 既存のChromeバージョンを探す（最新のものから順に）
     const cachePath = path.join(cacheDir, "chrome");
-    if (fs.existsSync(cachePath)) {
-      const versions = fs.readdirSync(cachePath).filter(dir => {
-        const versionPath = path.join(cachePath, dir);
+    
+    if (!fs.existsSync(cacheDir)) {
+      console.log(`[Puppeteer] Cache directory does not exist: ${cacheDir}`);
+      return undefined;
+    }
+    
+    if (!fs.existsSync(cachePath)) {
+      console.log(`[Puppeteer] Chrome cache path does not exist: ${cachePath}`);
+      return undefined;
+    }
+    
+    const dirs = fs.readdirSync(cachePath);
+    console.log(`[Puppeteer] Found ${dirs.length} items in Chrome cache directory`);
+    
+    const versions = dirs.filter(dir => {
+      const versionPath = path.join(cachePath, dir);
+      try {
         return fs.statSync(versionPath).isDirectory();
-      }).sort().reverse(); // 最新のバージョンから
+      } catch (error) {
+        return false;
+      }
+    }).sort().reverse(); // 最新のバージョンから
+    
+    console.log(`[Puppeteer] Found ${versions.length} Chrome version(s): ${versions.join(", ")}`);
+    
+    for (const version of versions) {
+      const executablePath = computeExecutablePath({
+        browser: Browser.CHROMIUM,
+        buildId: version,
+        cacheDir,
+        platform,
+      });
       
-      for (const version of versions) {
-        const executablePath = computeExecutablePath({
-          browser: Browser.CHROMIUM,
-          buildId: version,
-          cacheDir,
-          platform,
-        });
-        
-        if (fs.existsSync(executablePath)) {
-          console.log(`[Puppeteer] Found existing Chrome ${version} at: ${executablePath}`);
-          return executablePath;
-        }
+      console.log(`[Puppeteer] Checking Chrome ${version} at: ${executablePath}`);
+      
+      if (fs.existsSync(executablePath)) {
+        console.log(`[Puppeteer] ✓ Found existing Chrome ${version} at: ${executablePath}`);
+        return executablePath;
+      } else {
+        console.log(`[Puppeteer] ✗ Chrome executable not found at: ${executablePath}`);
       }
     }
+    
+    console.log(`[Puppeteer] No existing Chrome found in cache directory`);
   } catch (error: any) {
     console.warn(`[Puppeteer] Error checking existing Chrome: ${error.message}`);
+    console.warn(`[Puppeteer] Stack trace:`, error.stack);
   }
   return undefined;
 }
