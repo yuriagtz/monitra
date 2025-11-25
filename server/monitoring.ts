@@ -149,8 +149,10 @@ async function installChromeIfNeeded(): Promise<string | undefined> {
     }
     console.log(`[Puppeteer] Resolved Chrome build ID: ${buildId}`);
 
-    // インストール処理にタイムアウトを設定（Vercel環境では120秒、その他は180秒）
-    const timeout = process.env.VERCEL ? 120000 : 180000;
+    // インストール処理にタイムアウトを設定
+    // Vercel環境では60秒（関数実行時間制限を考慮）、その他は180秒
+    // Chrome 142はサイズが大きいため、タイムアウトが発生しやすい
+    const timeout = process.env.VERCEL ? 60000 : 180000;
     const installStartTime = Date.now();
     
     console.log(`[Puppeteer] Installing Chrome ${buildId} to ${cacheDir}... (timeout: ${timeout/1000}s)`);
@@ -188,7 +190,14 @@ async function installChromeIfNeeded(): Promise<string | undefined> {
       if (installError.message?.includes("timeout")) {
         console.error(`[Puppeteer] Chrome installation timed out after ${elapsedTime}s`);
         console.error(`[Puppeteer] Timeout limit: ${timeout/1000}s`);
-        console.error(`[Puppeteer] This may be due to slow network or large Chrome version (142+).`);
+        if (process.env.VERCEL) {
+          console.error(`[Puppeteer] Vercel environment: Function execution time limit may be reached.`);
+          console.error(`[Puppeteer] Vercel Pro plan allows up to 60s (default) or 300s (configurable).`);
+          console.error(`[Puppeteer] Chrome 142+ is large and may exceed execution time limits.`);
+          console.error(`[Puppeteer] Consider: 1) Using Chrome 141 or earlier, 2) Increasing Vercel function timeout, 3) Using external service for screenshots`);
+        } else {
+          console.error(`[Puppeteer] This may be due to slow network or large Chrome version (142+).`);
+        }
         console.error(`[Puppeteer] Cache directory: ${cacheDir}`);
         console.error(`[Puppeteer] Platform: ${platform}`);
         console.error(`[Puppeteer] Build ID: ${buildId}`);
