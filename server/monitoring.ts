@@ -1,6 +1,6 @@
 import puppeteer from "puppeteer";
 import puppeteerCore from "puppeteer-core";
-import chromium from "@sparticuz/chrome-aws-lambda";
+import chromium from "@sparticuz/chromium";
 import { install, detectBrowserPlatform, resolveBuildId, computeExecutablePath, Browser } from "@puppeteer/browsers";
 import pixelmatch from "pixelmatch";
 import { PNG } from "pngjs";
@@ -695,19 +695,18 @@ async function launchBrowser() {
   const isVercel = !!process.env.VERCEL;
   
   if (isVercel) {
-    // Vercel環境では@sparticuz/chrome-aws-lambdaを使用
+    // Vercel環境では@sparticuz/chromiumを使用
     // これにより、Runtimeでのダウンロード不要、/tmpへの展開不要、起動も高速
-    console.log("[Puppeteer] Vercel environment: Using @sparticuz/chrome-aws-lambda");
+    console.log("[Puppeteer] Vercel environment: Using @sparticuz/chromium");
     try {
-      // chromium.executablePathはPromiseを返すgetter（READMEの例に従う）
-      // @ts-ignore - chromium.executablePathはgetterでPromiseを返す
-      const executablePath = await chromium.executablePath;
+      // chromium.executablePath()は関数として呼び出す（Promiseを返す）
+      const executablePath = await chromium.executablePath();
       
       if (!executablePath || typeof executablePath !== 'string') {
-        throw new Error(`chromium.executablePath returned invalid value: ${executablePath}`);
+        throw new Error(`chromium.executablePath() returned invalid value: ${executablePath}`);
       }
       
-      console.log(`[Puppeteer] Chrome executable path from chrome-aws-lambda: ${executablePath}`);
+      console.log(`[Puppeteer] Chrome executable path from chromium: ${executablePath}`);
       
       // 実行ファイルが存在するか確認
       if (fs.existsSync(executablePath)) {
@@ -718,16 +717,20 @@ async function launchBrowser() {
       
       return await puppeteerCore.launch({
         args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
+        defaultViewport: {
+          width: 1920,
+          height: 1080,
+          deviceScaleFactor: 1,
+        },
         executablePath,
-        headless: chromium.headless,
+        headless: "shell",
       });
     } catch (error: any) {
-      console.error("[Puppeteer] Failed to launch browser with chrome-aws-lambda:", error.message);
+      console.error("[Puppeteer] Failed to launch browser with chromium:", error.message);
       console.error("[Puppeteer] Error stack:", error.stack);
       throw new Error(
         `Vercel環境でChrome起動に失敗しました: ${error.message}\n` +
-        `@sparticuz/chrome-aws-lambdaの設定を確認してください。`
+        `@sparticuz/chromiumの設定を確認してください。`
       );
     }
   } else {
