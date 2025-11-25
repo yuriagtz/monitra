@@ -1,4 +1,6 @@
 import puppeteer from "puppeteer";
+import puppeteerCore from "puppeteer-core";
+import chromium from "@sparticuz/chrome-aws-lambda";
 import { install, detectBrowserPlatform, resolveBuildId, computeExecutablePath, Browser } from "@puppeteer/browsers";
 import pixelmatch from "pixelmatch";
 import { PNG } from "pngjs";
@@ -683,103 +685,83 @@ function cleanupTempFiles() {
 }
 
 /**
- * Launch browser with proper Chrome path (with timeout and better error handling)
+ * Launch browser with proper Chrome path
+ * Vercel環境では@sparticuz/chrome-aws-lambdaを使用（軽量で高速）
+ * その他の環境では通常のChromeを使用
  */
 async function launchBrowser() {
   console.log("[Puppeteer] Launching browser...");
-  let executablePath: string | undefined;
   
-  // Vercel環境では古い一時ファイルをクリーンアップ
-  if (process.env.VERCEL) {
-    console.log("[Puppeteer] Vercel environment detected, cleaning up temp files...");
-    cleanupTempFiles();
-  }
+  const isVercel = !!process.env.VERCEL;
   
-  // タイムアウト付きでChromeパスを取得
-  // Vercel環境では、vercel.jsonでmaxDurationを300秒に設定しているため、それに合わせてタイムアウトを設定
-  // 実際の関数実行時間制限（300秒）より少し短く設定して、エラーハンドリングの時間を確保
-  console.log("[Puppeteer] Getting Chrome executable path...");
-  try {
-    const timeout = process.env.VERCEL ? 280000 : 180000; // Vercel: 280秒（約4.7分）、その他: 180秒（3分）
-    const timeoutPromise = new Promise<undefined>((resolve) => {
-      setTimeout(() => {
-        console.warn(`[Puppeteer] Chrome path resolution timeout after ${timeout/1000}s`);
-        resolve(undefined);
-      }, timeout);
-    });
-    
-    executablePath = await Promise.race([
-      getChromeExecutablePath(),
-      timeoutPromise,
-    ]);
-    
-    if (executablePath) {
-      console.log(`[Puppeteer] Chrome executable path obtained: ${executablePath}`);
-    } else {
-      console.warn("[Puppeteer] Chrome executable path not obtained (timeout or error)");
-    }
-  } catch (error: any) {
-    console.warn(`[Puppeteer] Error getting Chrome path: ${error.message}`);
-  }
-  
-  // Vercel環境では、executablePathが取得できなかった場合でもインストールを試みる
-  if (process.env.VERCEL && !executablePath) {
-    console.log("[Puppeteer] Vercel environment: executablePath not found, attempting installation...");
-    if (!chromeInstallPromise) {
-      console.log("[Puppeteer] Starting Chrome installation...");
-      chromeInstallPromise = installChromeIfNeeded();
-    } else {
-      console.log("[Puppeteer] Chrome installation already in progress, waiting...");
-    }
-    executablePath = await chromeInstallPromise;
-    if (executablePath) {
-      console.log(`[Puppeteer] Chrome installation completed: ${executablePath}`);
-    } else {
-      console.error("[Puppeteer] Chrome installation failed or returned undefined");
-    }
-  }
-  
-  // Vercel環境では、executablePathが必須
-  if (process.env.VERCEL && !executablePath) {
-    // より詳細なエラーメッセージを提供
-    console.error("[Puppeteer] ===== Chrome installation failed - Summary =====");
-    console.error("[Puppeteer] Cache directory:", process.env.PUPPETEER_CACHE_DIR || "/tmp/puppeteer");
-    console.error("[Puppeteer] Platform:", process.env.VERCEL ? "Vercel" : "Other");
-    console.error("[Puppeteer] Build ID override:", process.env.PUPPETEER_CHROME_BUILD_ID || "none");
-    
-    // キャッシュディレクトリの状態を確認
-    const cacheDir = process.env.PUPPETEER_CACHE_DIR || "/tmp/puppeteer";
+  if (isVercel) {
+    // Vercel環境では@sparticuz/chrome-aws-lambdaを使用
+    // これにより、Runtimeでのダウンロード不要、/tmpへの展開不要、起動も高速
+    console.log("[Puppeteer] Vercel environment: Using @sparticuz/chrome-aws-lambda");
     try {
-      if (fs.existsSync(cacheDir)) {
-        const entries = fs.readdirSync(cacheDir, { withFileTypes: true });
-        console.error("[Puppeteer] Cache directory contents:", entries.map(e => `${e.isDirectory() ? '[DIR]' : '[FILE]'} ${e.name}`).join(", "));
+      // chromium.executablePathはPromiseを返すgetter
+      const executablePath = await (chromium.executablePath as Promise<string>);
+      console.log(`[Puppeteer] Chrome executable path from chrome-aws-lambda: ${executablePath}`);
+      
+      return await puppeteerCore.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath,
+        headless: chromium.headless,
+      });
+    } catch (error: any) {
+      console.error("[Puppeteer] Failed to launch browser with chrome-aws-lambda:", error.message);
+      throw error;
+    }
+  } else {
+    // ローカル開発環境では既存のChromeを使用
+    console.log("[Puppeteer] Local environment: Using system Chrome or installed Chrome");
+    let executablePath: string | undefined;
+    
+    // タイムアウト付きでChromeパスを取得
+    console.log("[Puppeteer] Getting Chrome executable path...");
+    try {
+      const timeout = 180000; // 180秒（3分）
+      const timeoutPromise = new Promise<undefined>((resolve) => {
+        setTimeout(() => {
+          console.warn(`[Puppeteer] Chrome path resolution timeout after ${timeout/1000}s`);
+          resolve(undefined);
+        }, timeout);
+      });
+      
+      executablePath = await Promise.race([
+        getChromeExecutablePath(),
+        timeoutPromise,
+      ]);
+      
+      if (executablePath) {
+        console.log(`[Puppeteer] Chrome executable path obtained: ${executablePath}`);
       } else {
-        console.error("[Puppeteer] Cache directory does not exist");
+        console.warn("[Puppeteer] Chrome executable path not obtained (timeout or error)");
       }
-    } catch (dirError: any) {
-      console.error("[Puppeteer] Failed to check cache directory:", dirError.message);
+    } catch (error: any) {
+      console.warn(`[Puppeteer] Error getting Chrome path: ${error.message}`);
     }
     
-    throw new Error(
-      "Vercel環境でChromeのパスを取得できませんでした。" +
-      "\nインストール処理が失敗した可能性があります。" +
-      "\nログを確認してください。" +
-      "\n\n考えられる原因:" +
-      "\n1. Chromeのインストールに時間がかかりすぎた（タイムアウト）" +
-      "\n2. ディスク容量不足" +
-      "\n3. ネットワークエラー" +
-      "\n4. 実行権限の問題" +
-      "\n\n解決策:" +
-      "\n- ログで詳細なエラー情報を確認" +
-      "\n- 必要に応じてPUPPETEER_CHROME_BUILD_ID環境変数で特定のビルドIDを指定"
-    );
-  }
-  
-  // ユーザーデータディレクトリを取得
-  const userDataDir = getUserDataDir();
-  
-  // launchオプションを構築
-  const launchOptions: Parameters<typeof puppeteer.launch>[0] = {
+    // 既存のChromeが見つからない場合、インストールを試みる
+    if (!executablePath) {
+      console.log("[Puppeteer] Chrome not found, attempting installation...");
+      if (!chromeInstallPromise) {
+        chromeInstallPromise = installChromeIfNeeded();
+      }
+      executablePath = await chromeInstallPromise;
+      if (executablePath) {
+        console.log(`[Puppeteer] Chrome installation completed: ${executablePath}`);
+      } else {
+        console.warn("[Puppeteer] Chrome installation failed, letting Puppeteer use default behavior");
+      }
+    }
+    
+    // ユーザーデータディレクトリを取得
+    const userDataDir = getUserDataDir();
+    
+    // launchオプションを構築
+    const launchOptions: Parameters<typeof puppeteer.launch>[0] = {
     headless: true,
     userDataDir, // プロファイルディレクトリを明示的に指定
     args: [
@@ -851,26 +833,6 @@ async function launchBrowser() {
       }
     }
     
-    // Vercel環境でChromeが見つからないエラーの場合、再インストールを試みる
-    if (process.env.VERCEL && error.message?.includes("Could not find Chrome")) {
-      console.warn(`[Puppeteer] Chrome not found in Vercel, attempting re-installation: ${error.message}`);
-      
-      // インストールプロミスをリセット
-      chromeInstallPromise = null;
-      
-      // 再インストールを試みる
-      try {
-        const reinstalledPath = await installChromeIfNeeded();
-        if (reinstalledPath && fs.existsSync(reinstalledPath)) {
-          console.log(`[Puppeteer] Chrome re-installed successfully: ${reinstalledPath}`);
-          launchOptions.executablePath = reinstalledPath;
-          return await puppeteer.launch(launchOptions);
-        }
-      } catch (reinstallError: any) {
-        console.error(`[Puppeteer] Re-installation failed: ${reinstallError.message}`);
-      }
-    }
-    
     // executablePathを指定した場合に失敗したら、executablePathなしで再試行（非Vercel環境のみ）
     if (executablePath && error.message?.includes("Could not find Chrome") && !process.env.VERCEL) {
       console.warn(`[Puppeteer] Failed with explicit path, retrying without executablePath: ${error.message}`);
@@ -889,6 +851,7 @@ async function launchBrowser() {
       }
     }
     throw error;
+  }
   }
 }
 
