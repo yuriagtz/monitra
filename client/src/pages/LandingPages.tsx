@@ -128,9 +128,9 @@ export default function LandingPages() {
       staleTime: 1000 * 30, // 30秒間は新鮮とみなす
       cacheTime: 1000 * 60 * 5, // 5分間メモリに保持
       refetchOnWindowFocus: false, // ウィンドウフォーカス時は再取得しない（キャッシュを使用）
-      refetchOnMount: false, // マウント時もキャッシュがあれば使用
-      refetchInterval: 60000, // 60秒ごとに自動更新（30秒から延長）
-      refetchOnReconnect: false, // 再接続時も再取得しない
+      refetchOnMount: true, // マウント時は必ず取得（初回表示を確実に）
+      refetchInterval: 60000, // 60秒ごとに自動更新
+      refetchOnReconnect: true, // 再接続時は再取得（接続復旧時に最新データを取得）
     }
   );
 

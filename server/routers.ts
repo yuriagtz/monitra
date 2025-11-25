@@ -1328,26 +1328,22 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const limit = input.limit || 10;
         
-        // パフォーマンス最適化: JOINを使用して1つのクエリで取得
+        // ユーザーが所有するLPのIDを取得（キャッシュを活用）
+        const userLandingPages = await db.getLandingPagesByUserId(ctx.user.id);
+        const userLandingPageIds = userLandingPages.map((landingPage) => landingPage.id);
+        
+        if (userLandingPageIds.length === 0) {
+          return [];
+        }
+        
+        // ユーザーが所有するLPの監視履歴のみを取得（インデックスを活用）
         const dbInstance = await getDb();
         if (!dbInstance) return [];
         
         const result = await dbInstance
-          .select({
-            id: monitoringHistory.id,
-            landingPageId: monitoringHistory.landingPageId,
-            creativeId: monitoringHistory.creativeId,
-            status: monitoringHistory.status,
-            checkType: monitoringHistory.checkType,
-            message: monitoringHistory.message,
-            screenshotUrl: monitoringHistory.screenshotUrl,
-            diffImageUrl: monitoringHistory.diffImageUrl,
-            createdAt: monitoringHistory.createdAt,
-            regionAnalysis: monitoringHistory.regionAnalysis,
-          })
+          .select()
           .from(monitoringHistory)
-          .innerJoin(landingPages, eq(monitoringHistory.landingPageId, landingPages.id))
-          .where(eq(landingPages.userId, ctx.user.id))
+          .where(inArray(monitoringHistory.landingPageId, userLandingPageIds))
           .orderBy(desc(monitoringHistory.createdAt))
           .limit(limit);
         
