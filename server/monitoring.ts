@@ -1873,21 +1873,6 @@ export async function monitorCreative(creativeId: number): Promise<{
     };
   }
 
-  // ハッシュ値を計算する前に、画像をPNGに統一する
-  // これにより、PNG/JPGの形式の違いによるハッシュ値の不一致を防ぐ
-  const isCurrentPng = imageBuffer.length >= 8 && 
-    imageBuffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]));
-  
-  let currentImageForHash: Buffer;
-  if (isCurrentPng) {
-    currentImageForHash = imageBuffer;
-  } else {
-    // JPGの場合はPNGに変換してからハッシュを計算
-    currentImageForHash = await convertImageToPng(imageBuffer);
-  }
-  
-  const currentHash = hashBuffer(currentImageForHash);
-
   // 以前の最新履歴を取得（比較用と削除用の両方で使用）
   const previousLatestHistory = await db.getMonitoringHistoryByCreativeId(
     creativeId,
@@ -1901,6 +1886,9 @@ export async function monitorCreative(creativeId: number): Promise<{
   let message = "";
   let newImageUrl: string | undefined;
   let previousImageUrl: string | undefined; // 以前の最新画像（previous_screenshot_urlに設定）
+  let diffPercentage = 0;
+  let diffImageUrl: string | undefined;
+  let regionAnalysisResult = undefined;
 
   // 以前の最新履歴の画像がある場合は比較を行う
   if (previousLatestHistory.length > 0 && previousLatestHistory[0].screenshotUrl) {
@@ -1913,40 +1901,55 @@ export async function monitorCreative(creativeId: number): Promise<{
       // Download previous image (以前の最新画像)
       const previousResponse = await fetch(screenshotUrl);
       const arrayBuffer = await previousResponse.arrayBuffer();
-      const previousBuffer = Buffer.from(arrayBuffer) as Buffer;
+      let previousBuffer = Buffer.from(arrayBuffer) as Buffer;
       
-      // ハッシュ値を計算する前に、画像をPNGに統一する
-      // これにより、PNG/JPGの形式の違いによるハッシュ値の不一致を防ぐ
+      // 比較処理はPNGを期待しているため、JPGの場合はPNGに変換
+      // PNGの場合は変換不要（処理時間短縮）
       const isPreviousPng = previousBuffer.length >= 8 && 
         previousBuffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]));
       
-      let previousImageForHash: Buffer;
-      if (isPreviousPng) {
-        previousImageForHash = previousBuffer;
-      } else {
-        // JPGの場合はPNGに変換してからハッシュを計算
-        previousImageForHash = await convertImageToPng(previousBuffer);
+      if (!isPreviousPng) {
+        // JPGの場合はPNGに変換（比較用）
+        previousBuffer = await convertImageToPng(previousBuffer);
       }
       
-      // ハッシュ値を比較（両方ともPNGに統一済み）
-      const prevHash = hashBuffer(previousImageForHash);
+      // 新しい画像もPNGに統一（比較用）
+      const isCurrentPng = imageBuffer.length >= 8 && 
+        imageBuffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]));
       
-      if (currentHash !== prevHash) {
-        // 画像が変更された場合
+      let currentImageForComparison: Buffer;
+      if (isCurrentPng) {
+        currentImageForComparison = imageBuffer;
+      } else {
+        // JPGの場合はPNGに変換（比較用）
+        currentImageForComparison = await convertImageToPng(imageBuffer);
+      }
+      
+      // LPと同じようにピクセル差分で比較
+      const comparison = await compareScreenshotsByFirstViewAndBody(previousBuffer, currentImageForComparison);
+      diffPercentage = comparison.overall;
+      
+      // Store region analysis
+      regionAnalysisResult = {
+        firstView: comparison.firstView,
+        body: comparison.body,
+        analysis: comparison.analysis
+      };
+      
+      // Consider changed if difference is more than 3%
+      if (diffPercentage > 3) {
         contentChanged = true;
         message = "コンテンツ変更を検出";
         
-        // 差分がある場合のみ、Storageに新しい画像を保存
-        // クリエイティブ画像は小さいので、全てPNGで保存（変換処理不要、処理時間短縮）
+        // 差分がある場合のみ、Storageに新しい画像と差分画像を保存
+        // 元の画像形式（PNG/JPG）をそのまま保存
         const timestamp = Date.now();
-        const pngFileKey = `creatives/${creativeId}/${timestamp}.png`;
-        
-        // 画像がPNGかJPGかを確認
         const isPng = imageBuffer.length >= 8 && 
           imageBuffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]));
         
         if (isPng) {
           // PNGの場合はそのまま保存
+          const pngFileKey = `creatives/${creativeId}/${timestamp}.png`;
           const result = await storagePut(
             pngFileKey,
             imageBuffer,
@@ -1954,14 +1957,25 @@ export async function monitorCreative(creativeId: number): Promise<{
           );
           newImageUrl = result.url;
         } else {
-          // JPGの場合はPNGに変換して保存
-          const pngImage = await convertImageToPng(imageBuffer);
+          // JPGの場合はそのまま保存
+          const jpgFileKey = `creatives/${creativeId}/${timestamp}.jpg`;
           const result = await storagePut(
-            pngFileKey,
-            pngImage,
-            "image/png"
+            jpgFileKey,
+            imageBuffer,
+            "image/jpeg"
           );
           newImageUrl = result.url;
+        }
+        
+        // Save diff image (差分画像はPNGで保存)
+        if (comparison.diffImageBuffer) {
+          const diffPngFileKey = `creatives/${creativeId}/${timestamp}_diff.png`;
+          const diffResult = await storagePut(
+            diffPngFileKey,
+            comparison.diffImageBuffer,
+            "image/png"
+          );
+          diffImageUrl = diffResult.url;
         }
         
         // 差分が検出されたため、新しい画像が保存されました
@@ -1970,17 +1984,14 @@ export async function monitorCreative(creativeId: number): Promise<{
         contentChanged = false;
         message = "変更なし";
         
-        // 差分がない場合：最新の画像をPNGで保存（次回の比較用）
-        // PNGのまま保存することで、次回の比較時に変換処理が不要（処理時間短縮）
+        // 差分がない場合：最新の画像を元の形式のまま保存（次回の比較用）
         const timestamp = Date.now();
-        const pngFileKey = `creatives/${creativeId}/${timestamp}.png`;
-        
-        // 画像がPNGかJPGかを確認
         const isPng = imageBuffer.length >= 8 && 
           imageBuffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]));
         
         if (isPng) {
           // PNGの場合はそのまま保存
+          const pngFileKey = `creatives/${creativeId}/${timestamp}.png`;
           const result = await storagePut(
             pngFileKey,
             imageBuffer,
@@ -1988,12 +1999,12 @@ export async function monitorCreative(creativeId: number): Promise<{
           );
           newImageUrl = result.url;
         } else {
-          // JPGの場合はPNGに変換して保存（次回の比較用）
-          const pngImage = await convertImageToPng(imageBuffer);
+          // JPGの場合はそのまま保存
+          const jpgFileKey = `creatives/${creativeId}/${timestamp}.jpg`;
           const result = await storagePut(
-            pngFileKey,
-            pngImage,
-            "image/png"
+            jpgFileKey,
+            imageBuffer,
+            "image/jpeg"
           );
           newImageUrl = result.url;
         }
@@ -2001,18 +2012,16 @@ export async function monitorCreative(creativeId: number): Promise<{
     }
   } else {
     // 初回実行の場合は、変更なしとして保存
-    // クリエイティブ画像は小さいので、全てPNGで保存（次回の比較用、処理時間短縮）
+    // 元の画像形式（PNG/JPG）をそのまま保存
     contentChanged = false;
     message = "初回取得（基準画像を登録しました）";
     const timestamp = Date.now();
-    const pngFileKey = `creatives/${creativeId}/${timestamp}.png`;
-    
-    // 画像がPNGかJPGかを確認
     const isPng = imageBuffer.length >= 8 && 
       imageBuffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]));
     
     if (isPng) {
       // PNGの場合はそのまま保存
+      const pngFileKey = `creatives/${creativeId}/${timestamp}.png`;
       const result = await storagePut(
         pngFileKey,
         imageBuffer,
@@ -2020,12 +2029,12 @@ export async function monitorCreative(creativeId: number): Promise<{
       );
       newImageUrl = result.url;
     } else {
-      // JPGの場合はPNGに変換して保存（次回の比較用）
-      const pngImage = await convertImageToPng(imageBuffer);
+      // JPGの場合はそのまま保存
+      const jpgFileKey = `creatives/${creativeId}/${timestamp}.jpg`;
       const result = await storagePut(
-        pngFileKey,
-        pngImage,
-        "image/png"
+        jpgFileKey,
+        imageBuffer,
+        "image/jpeg"
       );
       newImageUrl = result.url;
     }
@@ -2035,8 +2044,17 @@ export async function monitorCreative(creativeId: number): Promise<{
 
   // Record monitoring history
   // 最新の履歴（監視実行時に作成される履歴）の場合は、差分がなくてもscreenshotUrlを保存する
-  // Region Analysisには常にハッシュ値を保存（画像比較用）
-  const regionAnalysisText = currentHash;
+  // Region AnalysisにはLPと同じように領域分析結果を保存
+  let regionAnalysisText = "";
+  if (regionAnalysisResult) {
+    regionAnalysisText = JSON.stringify({
+      firstView: regionAnalysisResult.firstView,
+      body: regionAnalysisResult.body,
+      analysis: regionAnalysisResult.analysis
+    });
+  } else {
+    regionAnalysisText = "変更なし";
+  }
   
   let monitoringHistoryId: number;
   try {
@@ -2048,7 +2066,10 @@ export async function monitorCreative(creativeId: number): Promise<{
       message,
       screenshotUrl: newImageUrl || undefined, // 最新の履歴なので常に保存
       previousScreenshotUrl: contentChanged ? previousImageUrl : undefined, // 差分があった場合のみ、以前の最新画像を保存
-      // ハッシュ値を regionAnalysis に保存（LPとは用途を分けて使用）
+      diffImageUrl,
+      diffTopThird: regionAnalysisResult ? regionAnalysisResult.firstView.toFixed(2) : undefined,
+      diffMiddleThird: regionAnalysisResult ? regionAnalysisResult.body.toFixed(2) : undefined,
+      diffBottomThird: undefined, // 廃止（互換性のため残す）
       regionAnalysis: regionAnalysisText,
     });
   } catch (error: any) {
