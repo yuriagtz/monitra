@@ -1,5 +1,5 @@
 import puppeteer from "puppeteer";
-import { install, detectBrowserPlatform, resolveBuildId, computeExecutablePath } from "@puppeteer/browsers";
+import { install, detectBrowserPlatform, resolveBuildId, computeExecutablePath, Browser } from "@puppeteer/browsers";
 import pixelmatch from "pixelmatch";
 import { PNG } from "pngjs";
 import { storagePut, storageGet, storageDelete, extractStorageKeyFromUrl } from "./storage";
@@ -10,6 +10,87 @@ import { compressImageToJpeg, convertKeyToJpeg } from "./imageCompression";
 import path from "path";
 import fs from "fs";
 import os from "os";
+
+// Chromeインストールのキャッシュ（一度だけインストールする）
+let chromeInstallPromise: Promise<string | undefined> | null = null;
+
+/**
+ * Install Chrome using @puppeteer/browsers if not found
+ */
+async function installChromeIfNeeded(): Promise<string | undefined> {
+  try {
+    const platform = detectBrowserPlatform();
+    if (!platform) {
+      console.warn("[Puppeteer] Could not detect browser platform");
+      return undefined;
+    }
+
+    // Chromeの最新ビルドIDを取得
+    const buildId = await resolveBuildId(Browser.CHROMIUM, platform, "latest");
+    if (!buildId) {
+      console.warn("[Puppeteer] Could not resolve Chrome build ID");
+      return undefined;
+    }
+
+    // キャッシュディレクトリを取得（環境変数またはデフォルト）
+    // Vercel環境では/tmpディレクトリを使用（書き込み可能）
+    let cacheDir = process.env.PUPPETEER_CACHE_DIR;
+    if (!cacheDir) {
+      if (process.env.VERCEL) {
+        // Vercel環境では/tmpディレクトリを使用
+        cacheDir = "/tmp/puppeteer";
+      } else {
+        // その他の環境では環境変数またはデフォルトパスを使用
+        cacheDir = process.env.XDG_CACHE_HOME || 
+                   path.join(os.homedir(), ".cache", "puppeteer");
+      }
+    }
+    
+    // キャッシュディレクトリが存在しない場合は作成
+    if (!fs.existsSync(cacheDir)) {
+      try {
+        fs.mkdirSync(cacheDir, { recursive: true });
+      } catch (error: any) {
+        console.warn(`[Puppeteer] Failed to create cache directory ${cacheDir}: ${error.message}`);
+        // フォールバック: /tmpを使用
+        if (cacheDir !== "/tmp/puppeteer") {
+          cacheDir = "/tmp/puppeteer";
+          if (!fs.existsSync(cacheDir)) {
+            fs.mkdirSync(cacheDir, { recursive: true });
+          }
+        }
+      }
+    }
+
+    // Chromeをインストール
+    console.log(`[Puppeteer] Installing Chrome ${buildId} to ${cacheDir}...`);
+    await install({
+      browser: Browser.CHROMIUM,
+      buildId,
+      cacheDir,
+      platform,
+    });
+
+    // インストールされたChromeの実行パスを取得
+    const executablePath = computeExecutablePath({
+      browser: Browser.CHROMIUM,
+      buildId,
+      cacheDir,
+      platform,
+    });
+
+    if (fs.existsSync(executablePath)) {
+      console.log(`[Puppeteer] Chrome installed successfully: ${executablePath}`);
+      return executablePath;
+    } else {
+      console.warn(`[Puppeteer] Chrome executable not found at: ${executablePath}`);
+      return undefined;
+    }
+  } catch (error: any) {
+    console.error("[Puppeteer] Failed to install Chrome:", error.message);
+    return undefined;
+  }
+}
 
 /**
  * Get Chrome executable path, with timeout and fallback
@@ -64,8 +145,21 @@ async function getChromeExecutablePath(): Promise<string | undefined> {
     console.warn("[Puppeteer] Could not get default executable path:", error);
   }
   
-  // 見つからない場合はundefinedを返す（Puppeteerに自動検出を任せる）
-  console.warn("[Puppeteer] Chrome not found, letting Puppeteer use default behavior");
+  // Chromeが見つからない場合、インストールを試みる
+  console.log("[Puppeteer] Chrome not found, attempting to install...");
+  
+  // インストール処理は一度だけ実行されるようにキャッシュ
+  if (!chromeInstallPromise) {
+    chromeInstallPromise = installChromeIfNeeded();
+  }
+  
+  const installedPath = await chromeInstallPromise;
+  if (installedPath) {
+    return installedPath;
+  }
+  
+  // インストールも失敗した場合はundefinedを返す（Puppeteerに自動検出を任せる）
+  console.warn("[Puppeteer] Chrome installation failed, letting Puppeteer use default behavior");
   return undefined;
 }
 
@@ -75,10 +169,10 @@ async function getChromeExecutablePath(): Promise<string | undefined> {
 async function launchBrowser() {
   let executablePath: string | undefined;
   
-  // タイムアウト付きでChromeパスを取得（最大3秒）
+  // タイムアウト付きでChromeパスを取得（最大10秒 - インストール時間を考慮）
   try {
     const timeoutPromise = new Promise<undefined>((resolve) => {
-      setTimeout(() => resolve(undefined), 3000);
+      setTimeout(() => resolve(undefined), 10000);
     });
     
     executablePath = await Promise.race([
@@ -102,6 +196,7 @@ async function launchBrowser() {
       "--disable-background-timer-throttling",
       "--disable-backgrounding-occluded-windows",
       "--disable-renderer-backgrounding",
+      "--single-process", // Vercel環境でのメモリ制約に対応
     ],
   };
   
@@ -117,7 +212,18 @@ async function launchBrowser() {
     if (executablePath && error.message?.includes("Could not find Chrome")) {
       console.warn(`[Puppeteer] Failed with explicit path, retrying without executablePath: ${error.message}`);
       delete launchOptions.executablePath;
-      return await puppeteer.launch(launchOptions);
+      try {
+        return await puppeteer.launch(launchOptions);
+      } catch (retryError: any) {
+        // 再試行も失敗した場合、より詳細なエラーメッセージを提供
+        throw new Error(
+          `Chrome起動に失敗しました。` +
+          `\n明示的なパス: ${executablePath}` +
+          `\nエラー: ${retryError.message}` +
+          `\nヒント: PUPPETEER_EXECUTABLE_PATH環境変数を設定するか、` +
+          `\nChromeが正しくインストールされているか確認してください。`
+        );
+      }
     }
     throw error;
   }
@@ -127,7 +233,22 @@ async function launchBrowser() {
  * Take a screenshot of a URL and return the buffer
  */
 export async function captureScreenshot(url: string): Promise<Buffer> {
-  const browser = await launchBrowser();
+  let browser;
+  try {
+    browser = await launchBrowser();
+  } catch (error: any) {
+    // Chrome起動エラーの場合、より詳細なエラーメッセージを提供
+    if (error.message?.includes("Could not find Chrome") || error.message?.includes("Chrome起動に失敗")) {
+      throw new Error(
+        `スクリーンショット撮影に失敗しました: Chromeが見つかりません。` +
+        `\n${error.message}` +
+        `\n\n解決方法:` +
+        `\n1. PUPPETEER_EXECUTABLE_PATH環境変数にChromeのパスを設定` +
+        `\n2. または、@puppeteer/browsersがChromeを自動インストールできるように権限を確認`
+      );
+    }
+    throw error;
+  }
 
   try {
     const page = await browser.newPage();
@@ -188,8 +309,18 @@ export async function captureScreenshot(url: string): Promise<Buffer> {
       captureBeyondViewport: true,
     });
     return screenshot as Buffer;
+  } catch (error: any) {
+    // スクリーンショット撮影中のエラーを詳細に記録
+    console.error(`[Puppeteer] Screenshot capture failed for ${url}:`, error.message);
+    throw error;
   } finally {
-    await browser.close();
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (closeError) {
+        console.warn("[Puppeteer] Error closing browser:", closeError);
+      }
+    }
   }
 }
 
