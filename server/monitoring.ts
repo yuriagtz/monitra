@@ -1873,7 +1873,20 @@ export async function monitorCreative(creativeId: number): Promise<{
     };
   }
 
-  const currentHash = hashBuffer(imageBuffer);
+  // ハッシュ値を計算する前に、画像をPNGに統一する
+  // これにより、PNG/JPGの形式の違いによるハッシュ値の不一致を防ぐ
+  const isCurrentPng = imageBuffer.length >= 8 && 
+    imageBuffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]));
+  
+  let currentImageForHash: Buffer;
+  if (isCurrentPng) {
+    currentImageForHash = imageBuffer;
+  } else {
+    // JPGの場合はPNGに変換してからハッシュを計算
+    currentImageForHash = await convertImageToPng(imageBuffer);
+  }
+  
+  const currentHash = hashBuffer(currentImageForHash);
 
   // 以前の最新履歴を取得（比較用と削除用の両方で使用）
   const previousLatestHistory = await db.getMonitoringHistoryByCreativeId(
@@ -1902,8 +1915,21 @@ export async function monitorCreative(creativeId: number): Promise<{
       const arrayBuffer = await previousResponse.arrayBuffer();
       const previousBuffer = Buffer.from(arrayBuffer) as Buffer;
       
-      // ハッシュ値を比較（PNG/JPGどちらでも比較可能）
-      const prevHash = hashBuffer(previousBuffer);
+      // ハッシュ値を計算する前に、画像をPNGに統一する
+      // これにより、PNG/JPGの形式の違いによるハッシュ値の不一致を防ぐ
+      const isPreviousPng = previousBuffer.length >= 8 && 
+        previousBuffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]));
+      
+      let previousImageForHash: Buffer;
+      if (isPreviousPng) {
+        previousImageForHash = previousBuffer;
+      } else {
+        // JPGの場合はPNGに変換してからハッシュを計算
+        previousImageForHash = await convertImageToPng(previousBuffer);
+      }
+      
+      // ハッシュ値を比較（両方ともPNGに統一済み）
+      const prevHash = hashBuffer(previousImageForHash);
       
       if (currentHash !== prevHash) {
         // 画像が変更された場合
