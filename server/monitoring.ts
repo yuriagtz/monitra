@@ -33,6 +33,39 @@ if (process.env.VERCEL) {
 }
 
 /**
+ * Check if Chrome is already installed
+ */
+function checkExistingChrome(cacheDir: string, platform: any): string | undefined {
+  try {
+    // 既存のChromeバージョンを探す（最新のものから順に）
+    const cachePath = path.join(cacheDir, "chrome");
+    if (fs.existsSync(cachePath)) {
+      const versions = fs.readdirSync(cachePath).filter(dir => {
+        const versionPath = path.join(cachePath, dir);
+        return fs.statSync(versionPath).isDirectory();
+      }).sort().reverse(); // 最新のバージョンから
+      
+      for (const version of versions) {
+        const executablePath = computeExecutablePath({
+          browser: Browser.CHROMIUM,
+          buildId: version,
+          cacheDir,
+          platform,
+        });
+        
+        if (fs.existsSync(executablePath)) {
+          console.log(`[Puppeteer] Found existing Chrome ${version} at: ${executablePath}`);
+          return executablePath;
+        }
+      }
+    }
+  } catch (error: any) {
+    console.warn(`[Puppeteer] Error checking existing Chrome: ${error.message}`);
+  }
+  return undefined;
+}
+
+/**
  * Install Chrome using @puppeteer/browsers if not found
  */
 async function installChromeIfNeeded(): Promise<string | undefined> {
@@ -40,13 +73,6 @@ async function installChromeIfNeeded(): Promise<string | undefined> {
     const platform = detectBrowserPlatform();
     if (!platform) {
       console.warn("[Puppeteer] Could not detect browser platform");
-      return undefined;
-    }
-
-    // Chromeの最新ビルドIDを取得
-    const buildId = await resolveBuildId(Browser.CHROMIUM, platform, "latest");
-    if (!buildId) {
-      console.warn("[Puppeteer] Could not resolve Chrome build ID");
       return undefined;
     }
 
@@ -80,14 +106,46 @@ async function installChromeIfNeeded(): Promise<string | undefined> {
       }
     }
 
-    // Chromeをインストール
-    console.log(`[Puppeteer] Installing Chrome ${buildId} to ${cacheDir}...`);
-    await install({
+    // 既存のChromeをチェック（インストール済みの場合は再利用）
+    const existingChrome = checkExistingChrome(cacheDir, platform);
+    if (existingChrome) {
+      console.log(`[Puppeteer] Using existing Chrome: ${existingChrome}`);
+      return existingChrome;
+    }
+
+    // Chromeの最新ビルドIDを取得
+    console.log("[Puppeteer] Resolving Chrome build ID...");
+    const buildId = await resolveBuildId(Browser.CHROMIUM, platform, "latest");
+    if (!buildId) {
+      console.warn("[Puppeteer] Could not resolve Chrome build ID");
+      return undefined;
+    }
+    console.log(`[Puppeteer] Resolved Chrome build ID: ${buildId}`);
+
+    // インストール処理にタイムアウトを設定（Vercel環境では120秒、その他は180秒）
+    const timeout = process.env.VERCEL ? 120000 : 180000;
+    const installStartTime = Date.now();
+    
+    console.log(`[Puppeteer] Installing Chrome ${buildId} to ${cacheDir}... (timeout: ${timeout/1000}s)`);
+    
+    // タイムアウト付きでインストール
+    const installPromise = install({
       browser: Browser.CHROMIUM,
       buildId,
       cacheDir,
       platform,
     });
+    
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`Chrome installation timeout after ${timeout/1000} seconds`));
+      }, timeout);
+    });
+    
+    await Promise.race([installPromise, timeoutPromise]);
+    
+    const installDuration = ((Date.now() - installStartTime) / 1000).toFixed(1);
+    console.log(`[Puppeteer] Chrome installation completed in ${installDuration}s`);
 
     // インストールされたChromeの実行パスを取得
     const executablePath = computeExecutablePath({
@@ -105,7 +163,13 @@ async function installChromeIfNeeded(): Promise<string | undefined> {
       return undefined;
     }
   } catch (error: any) {
-    console.error("[Puppeteer] Failed to install Chrome:", error.message);
+    if (error.message?.includes("timeout")) {
+      console.error(`[Puppeteer] Chrome installation timed out: ${error.message}`);
+      console.error(`[Puppeteer] This may be due to slow network or large Chrome version (142+).`);
+      console.error(`[Puppeteer] Consider using an older Chrome version or increasing timeout.`);
+    } else {
+      console.error("[Puppeteer] Failed to install Chrome:", error.message);
+    }
     return undefined;
   }
 }
@@ -146,23 +210,37 @@ async function getChromeExecutablePath(): Promise<string | undefined> {
       }
     }
     
-    // Vercel環境では、puppeteer.executablePath()を呼ばずに、直接インストールを試みる
-    // （puppeteer.executablePath()は書き込み不可能なデフォルトパスを参照するため）
-    console.log("[Puppeteer] Vercel environment detected, attempting to install Chrome to /tmp...");
-    
-    // インストール処理は一度だけ実行されるようにキャッシュ
-    if (!chromeInstallPromise) {
-      chromeInstallPromise = installChromeIfNeeded();
+  // Vercel環境では、puppeteer.executablePath()を呼ばずに、直接インストールを試みる
+  // （puppeteer.executablePath()は書き込み不可能なデフォルトパスを参照するため）
+  console.log("[Puppeteer] Vercel environment detected, checking for existing Chrome or installing...");
+  
+  // まず既存のChromeをチェック（インストール済みの場合は再利用）
+  const platform = detectBrowserPlatform();
+  if (platform) {
+    const cacheDir = process.env.PUPPETEER_CACHE_DIR || "/tmp/puppeteer";
+    const existingChrome = checkExistingChrome(cacheDir, platform);
+    if (existingChrome) {
+      console.log(`[Puppeteer] Using existing Chrome in Vercel: ${existingChrome}`);
+      return existingChrome;
     }
-    
-    const installedPath = await chromeInstallPromise;
-    if (installedPath) {
-      return installedPath;
-    }
-    
-    // インストールも失敗した場合はundefinedを返す
-    console.warn("[Puppeteer] Chrome installation failed in Vercel environment");
-    return undefined;
+  }
+  
+  // 既存のChromeが見つからない場合、インストールを試みる
+  console.log("[Puppeteer] No existing Chrome found, attempting installation...");
+  
+  // インストール処理は一度だけ実行されるようにキャッシュ
+  if (!chromeInstallPromise) {
+    chromeInstallPromise = installChromeIfNeeded();
+  }
+  
+  const installedPath = await chromeInstallPromise;
+  if (installedPath) {
+    return installedPath;
+  }
+  
+  // インストールも失敗した場合はundefinedを返す
+  console.warn("[Puppeteer] Chrome installation failed in Vercel environment");
+  return undefined;
   }
   
   // 非Vercel環境では、Puppeteerのデフォルト実行パスを試す
@@ -277,10 +355,15 @@ async function launchBrowser() {
     cleanupTempFiles();
   }
   
-  // タイムアウト付きでChromeパスを取得（最大30秒 - インストール時間を考慮）
+  // タイムアウト付きでChromeパスを取得（Vercel環境では120秒、その他は180秒）
+  // Chrome 142のインストールには時間がかかるため、タイムアウトを延長
   try {
+    const timeout = process.env.VERCEL ? 120000 : 180000;
     const timeoutPromise = new Promise<undefined>((resolve) => {
-      setTimeout(() => resolve(undefined), 30000);
+      setTimeout(() => {
+        console.warn(`[Puppeteer] Chrome path resolution timeout after ${timeout/1000}s`);
+        resolve(undefined);
+      }, timeout);
     });
     
     executablePath = await Promise.race([
