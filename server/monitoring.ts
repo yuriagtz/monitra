@@ -164,10 +164,82 @@ async function getChromeExecutablePath(): Promise<string | undefined> {
 }
 
 /**
+ * Get or create user data directory for Chrome profile
+ * Vercel環境では/tmpディレクトリを使用し、既存のプロファイルを再利用
+ */
+function getUserDataDir(): string {
+  if (process.env.VERCEL) {
+    // Vercel環境では固定のプロファイルディレクトリを使用（再利用）
+    const userDataDir = "/tmp/puppeteer_profile";
+    
+    // ディレクトリが存在しない場合は作成
+    if (!fs.existsSync(userDataDir)) {
+      try {
+        fs.mkdirSync(userDataDir, { recursive: true });
+      } catch (error: any) {
+        console.warn(`[Puppeteer] Failed to create userDataDir ${userDataDir}: ${error.message}`);
+        // フォールバック: ランダムなディレクトリ名を使用
+        return path.join("/tmp", `puppeteer_profile_${Date.now()}`);
+      }
+    }
+    
+    return userDataDir;
+  } else {
+    // その他の環境では環境変数またはデフォルトパスを使用
+    return process.env.PUPPETEER_USER_DATA_DIR || 
+           path.join(os.tmpdir(), "puppeteer_profile");
+  }
+}
+
+/**
+ * Clean up old temporary files in /tmp to free up space
+ */
+function cleanupTempFiles() {
+  if (!process.env.VERCEL) {
+    return; // Vercel環境でのみ実行
+  }
+  
+  try {
+    const tmpDir = "/tmp";
+    const files = fs.readdirSync(tmpDir);
+    const now = Date.now();
+    const maxAge = 3600000; // 1時間前のファイルを削除
+    
+    for (const file of files) {
+      // puppeteer関連の一時ファイルのみをクリーンアップ
+      if (file.startsWith("puppeteer") || file.startsWith("chrome")) {
+        const filePath = path.join(tmpDir, file);
+        try {
+          const stats = fs.statSync(filePath);
+          if (now - stats.mtimeMs > maxAge) {
+            if (stats.isDirectory()) {
+              fs.rmSync(filePath, { recursive: true, force: true });
+            } else {
+              fs.unlinkSync(filePath);
+            }
+            console.log(`[Puppeteer] Cleaned up old temp file: ${filePath}`);
+          }
+        } catch (error: any) {
+          // ファイル削除エラーは無視（他のプロセスが使用中など）
+          console.warn(`[Puppeteer] Failed to clean up ${filePath}: ${error.message}`);
+        }
+      }
+    }
+  } catch (error: any) {
+    console.warn(`[Puppeteer] Failed to cleanup temp files: ${error.message}`);
+  }
+}
+
+/**
  * Launch browser with proper Chrome path (with timeout and better error handling)
  */
 async function launchBrowser() {
   let executablePath: string | undefined;
+  
+  // Vercel環境では古い一時ファイルをクリーンアップ
+  if (process.env.VERCEL) {
+    cleanupTempFiles();
+  }
   
   // タイムアウト付きでChromeパスを取得（最大10秒 - インストール時間を考慮）
   try {
@@ -183,9 +255,13 @@ async function launchBrowser() {
     console.warn(`[Puppeteer] Error getting Chrome path: ${error.message}`);
   }
   
+  // ユーザーデータディレクトリを取得
+  const userDataDir = getUserDataDir();
+  
   // launchオプションを構築
   const launchOptions: Parameters<typeof puppeteer.launch>[0] = {
     headless: true,
+    userDataDir, // プロファイルディレクトリを明示的に指定
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
@@ -197,6 +273,10 @@ async function launchBrowser() {
       "--disable-backgrounding-occluded-windows",
       "--disable-renderer-backgrounding",
       "--single-process", // Vercel環境でのメモリ制約に対応
+      "--disable-background-networking", // バックグラウンドネットワークを無効化して容量を節約
+      "--disable-sync", // 同期を無効化
+      "--disable-default-apps", // デフォルトアプリを無効化
+      "--disable-translate", // 翻訳機能を無効化
     ],
   };
   
@@ -208,6 +288,26 @@ async function launchBrowser() {
   try {
     return await puppeteer.launch(launchOptions);
   } catch (error: any) {
+    // ENOSPCエラーの場合、プロファイルディレクトリをクリーンアップして再試行
+    if (error.message?.includes("ENOSPC") || error.message?.includes("no space left")) {
+      console.warn(`[Puppeteer] Disk space error, cleaning up profile directory: ${error.message}`);
+      try {
+        if (fs.existsSync(userDataDir)) {
+          fs.rmSync(userDataDir, { recursive: true, force: true });
+          fs.mkdirSync(userDataDir, { recursive: true });
+        }
+        // クリーンアップ後に再試行
+        return await puppeteer.launch(launchOptions);
+      } catch (cleanupError: any) {
+        console.error(`[Puppeteer] Failed to cleanup and retry: ${cleanupError.message}`);
+        throw new Error(
+          `ディスク容量不足のためChrome起動に失敗しました。` +
+          `\nエラー: ${error.message}` +
+          `\nヒント: /tmpディレクトリの容量を確認してください。`
+        );
+      }
+    }
+    
     // executablePathを指定した場合に失敗したら、executablePathなしで再試行
     if (executablePath && error.message?.includes("Could not find Chrome")) {
       console.warn(`[Puppeteer] Failed with explicit path, retrying without executablePath: ${error.message}`);
