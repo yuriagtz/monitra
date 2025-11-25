@@ -8,7 +8,7 @@ import { storagePut, storageGet, storageDelete, extractStorageKeyFromUrl } from 
 import * as db from "./db";
 import { sendNotifications } from "./notification";
 import crypto from "crypto";
-import { compressImageToJpeg, convertKeyToJpeg } from "./imageCompression";
+import { compressImageToJpeg, convertKeyToJpeg, convertImageToPng } from "./imageCompression";
 import path from "path";
 import fs from "fs";
 import os from "os";
@@ -1477,10 +1477,18 @@ export async function monitorLandingPage(landingPageId: number): Promise<{
       
       // Download previous screenshot (以前の最新画像)
       const previousResponse = await fetch(screenshotUrl);
-      const previousBuffer = Buffer.from(await previousResponse.arrayBuffer());
+      const arrayBuffer = await previousResponse.arrayBuffer();
+      let previousBuffer = Buffer.from(arrayBuffer) as Buffer;
+      
+      // 以前のスクリーンショットはJPGとして保存されている可能性があるため、PNGに変換
+      // 比較処理はPNGを期待しているため、統一する必要がある
+      previousBuffer = await convertImageToPng(previousBuffer);
+      
+      // 新しいスクリーンショットもPNGに統一（念のため）
+      const newScreenshotPngBuffer = await convertImageToPng(newScreenshotBuffer);
 
       // Compare screenshots with region analysis
-      const comparison = await compareScreenshotsByFirstViewAndBody(previousBuffer, newScreenshotBuffer);
+      const comparison = await compareScreenshotsByFirstViewAndBody(previousBuffer, newScreenshotPngBuffer);
       diffPercentage = comparison.overall;
       
       // Store region analysis

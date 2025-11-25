@@ -38,3 +38,23 @@ export function convertKeyToJpeg(originalKey: string): string {
   return originalKey.replace(/\.png$/i, ".jpg");
 }
 
+/**
+ * 任意の画像形式（JPG/JPEG/PNG等）をPNGに変換
+ * 比較処理で使用するため、PNG形式に統一する
+ * @param imageBuffer 任意の画像形式のバッファ
+ * @returns PNG形式のバッファ
+ */
+export async function convertImageToPng(imageBuffer: Buffer): Promise<Buffer> {
+  try {
+    const pngBuffer = await sharp(imageBuffer)
+      .png()
+      .toBuffer();
+    
+    return pngBuffer;
+  } catch (error) {
+    console.error("[Image Conversion] Failed to convert image to PNG:", error);
+    // 変換に失敗した場合は元のバッファを返す（既にPNGの可能性がある）
+    return imageBuffer;
+  }
+}
+
