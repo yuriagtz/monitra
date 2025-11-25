@@ -39,6 +39,16 @@ function checkExistingChrome(cacheDir: string, platform: any): string | undefine
   try {
     console.log(`[Puppeteer] Checking for existing Chrome in: ${cacheDir}`);
     
+    // デバッグ: 実際のディレクトリ構造を確認
+    if (fs.existsSync(cacheDir)) {
+      try {
+        const entries = fs.readdirSync(cacheDir, { withFileTypes: true });
+        console.log(`[Puppeteer] Cache directory structure:`, entries.map(e => `${e.isDirectory() ? '[DIR]' : '[FILE]'} ${e.name}`).join(", "));
+      } catch (error: any) {
+        console.warn(`[Puppeteer] Failed to read cache directory structure: ${error.message}`);
+      }
+    }
+    
     // 既存のChromeバージョンを探す（最新のものから順に）
     const cachePath = path.join(cacheDir, "chrome");
     
@@ -50,6 +60,14 @@ function checkExistingChrome(cacheDir: string, platform: any): string | undefine
     if (!fs.existsSync(cachePath)) {
       console.log(`[Puppeteer] Chrome cache path does not exist: ${cachePath}`);
       return undefined;
+    }
+    
+    // デバッグ: Chromeディレクトリの構造を確認
+    try {
+      const chromeEntries = fs.readdirSync(cachePath, { withFileTypes: true });
+      console.log(`[Puppeteer] Chrome directory structure:`, chromeEntries.map(e => `${e.isDirectory() ? '[DIR]' : '[FILE]'} ${e.name}`).join(", "));
+    } catch (error: any) {
+      console.warn(`[Puppeteer] Failed to read Chrome directory structure: ${error.message}`);
     }
     
     const dirs = fs.readdirSync(cachePath);
@@ -77,6 +95,22 @@ function checkExistingChrome(cacheDir: string, platform: any): string | undefine
       console.log(`[Puppeteer] Checking Chrome ${version} at: ${executablePath}`);
       
       if (fs.existsSync(executablePath)) {
+        // 実行権限を確認・設定
+        try {
+          const stats = fs.statSync(executablePath);
+          const mode = stats.mode;
+          const isExecutable = (mode & parseInt('111', 8)) !== 0;
+          
+          if (!isExecutable) {
+            console.log(`[Puppeteer] Chrome executable does not have execute permission, setting it...`);
+            fs.chmodSync(executablePath, 0o755);
+            console.log(`[Puppeteer] ✓ Execute permission set for Chrome ${version}`);
+          }
+        } catch (chmodError: any) {
+          console.warn(`[Puppeteer] Failed to set execute permission: ${chmodError.message}`);
+          // 実行権限の設定に失敗しても続行（既に実行可能な場合もある）
+        }
+        
         console.log(`[Puppeteer] ✓ Found existing Chrome ${version} at: ${executablePath}`);
         return executablePath;
       } else {
@@ -300,6 +334,15 @@ async function installChromeIfNeeded(): Promise<string | undefined> {
     console.log(`[Puppeteer] Checking installed Chrome at: ${executablePath}`);
     
     if (fs.existsSync(executablePath)) {
+      // 実行権限を設定（EACCESエラーを防ぐため）
+      try {
+        fs.chmodSync(executablePath, 0o755);
+        console.log(`[Puppeteer] ✓ Execute permission set for installed Chrome`);
+      } catch (chmodError: any) {
+        console.warn(`[Puppeteer] Failed to set execute permission: ${chmodError.message}`);
+        // 実行権限の設定に失敗しても続行
+      }
+      
       const stats = fs.statSync(executablePath);
       console.log(`[Puppeteer] Chrome installed successfully: ${executablePath}`);
       console.log(`[Puppeteer] Chrome file size: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
