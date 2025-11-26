@@ -1424,6 +1424,40 @@ export async function monitorLandingPage(landingPageId: number): Promise<{
       console.error("[Notification] Failed to send link_broken notification:", error);
     }
     
+    // 3回連続でリンクエラーが出た場合は自動監視対象から除外
+    try {
+      const recentHistory = await db.getMonitoringHistoryByLandingPageId(landingPageId, 3);
+      // 最新3件が全てリンクエラー（checkType === "link_broken" かつ status === "error"）かチェック
+      if (recentHistory.length >= 3) {
+        const allLinkErrors = recentHistory.every(
+          (h) => h.checkType === "link_broken" && h.status === "error"
+        );
+        
+        if (allLinkErrors) {
+          console.log(`[Auto-Exclude] LP ${landingPageId} has 3 consecutive link errors, excluding from automatic monitoring`);
+          
+          // スケジュール設定を取得
+          const scheduleSettings = await db.getScheduleSettingsByUserId(landingPage.userId);
+          if (scheduleSettings) {
+            // 除外LPリストに追加
+            const excludedIds = scheduleSettings.excludedLandingPageIds
+              ? (JSON.parse(scheduleSettings.excludedLandingPageIds) as number[])
+              : [];
+            
+            if (!excludedIds.includes(landingPageId)) {
+              excludedIds.push(landingPageId);
+              await db.upsertScheduleSettings(landingPage.userId, {
+                excludedLandingPageIds: JSON.stringify(excludedIds),
+              });
+              console.log(`[Auto-Exclude] LP ${landingPageId} has been excluded from automatic monitoring`);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`[Auto-Exclude] Failed to check consecutive link errors for LP ${landingPageId}:`, error);
+    }
+    
     return {
       contentChanged: false,
       linkBroken: true,
@@ -1812,6 +1846,40 @@ export async function monitorCreative(creativeId: number): Promise<{
         }
       } catch (error) {
         console.error("[Notification] Failed to send creative link_broken notification:", error);
+      }
+      
+      // 3回連続でリンクエラーが出た場合は自動監視対象から除外
+      try {
+        const recentHistory = await db.getMonitoringHistoryByCreativeId(creativeId, 3);
+        // 最新3件が全てリンクエラー（checkType === "link_broken" かつ status === "error"）かチェック
+        if (recentHistory.length >= 3) {
+          const allLinkErrors = recentHistory.every(
+            (h) => h.checkType === "link_broken" && h.status === "error"
+          );
+          
+          if (allLinkErrors) {
+            console.log(`[Auto-Exclude] Creative ${creativeId} has 3 consecutive link errors, excluding from automatic monitoring`);
+            
+            // スケジュール設定を取得
+            const scheduleSettings = await db.getCreativeScheduleSettingsByUserId(creative.userId);
+            if (scheduleSettings) {
+              // 除外クリエイティブリストに追加
+              const excludedIds = scheduleSettings.excludedCreativeIds
+                ? (JSON.parse(scheduleSettings.excludedCreativeIds) as number[])
+                : [];
+              
+              if (!excludedIds.includes(creativeId)) {
+                excludedIds.push(creativeId);
+                await db.upsertCreativeScheduleSettings(creative.userId, {
+                  excludedCreativeIds: JSON.stringify(excludedIds),
+                });
+                console.log(`[Auto-Exclude] Creative ${creativeId} has been excluded from automatic monitoring`);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`[Auto-Exclude] Failed to check consecutive link errors for Creative ${creativeId}:`, error);
       }
       
       return {
