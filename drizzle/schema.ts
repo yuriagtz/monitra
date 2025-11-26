@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, varchar, boolean, integer, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, varchar, boolean, integer, pgEnum, unique } from "drizzle-orm/pg-core";
 
 // Enums
 export const roleEnum = pgEnum("role", ["user", "admin"]);
@@ -121,6 +121,10 @@ export const landingPageTags = pgTable("landing_page_tags", {
   landingPageId: integer("landing_page_id").notNull(),
   tagId: integer("tag_id").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => {
+  return {
+    landingPageTagUnique: unique("landing_page_tags_landing_page_id_tag_id_unique").on(table.landingPageId, table.tagId),
+  };
 });
 
 export type LandingPageTag = typeof landingPageTags.$inferSelect;
@@ -134,6 +138,10 @@ export const creativeTags = pgTable("creative_tags", {
   creativeId: integer("creative_id").notNull(),
   tagId: integer("tag_id").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => {
+  return {
+    creativeTagUnique: unique("creative_tags_creative_id_tag_id_unique").on(table.creativeId, table.tagId),
+  };
 });
 
 export type CreativeTag = typeof creativeTags.$inferSelect;
