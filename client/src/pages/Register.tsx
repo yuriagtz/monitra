@@ -57,19 +57,10 @@ export default function Register() {
           return;
         }
 
-        // Invalidate and refetch auth state to update the UI
-        await utils.auth.me.invalidate();
-        // 認証状態を再取得してからリダイレクト
-        const result = await utils.auth.me.refetch();
-        if (result.data) {
-          // 認証状態が確認できたらクライアントサイドルーティングで遷移（再読み込みなし）
-          setLocation("/");
-        } else {
-          // 認証状態が確認できない場合は少し待ってからリダイレクト
-          setTimeout(() => {
-            setLocation("/");
-          }, 500);
-        }
+        // 認証状態を更新（並行で実行、リダイレクトをブロックしない）
+        utils.auth.me.invalidate();
+        // 即座にリダイレクト（refetchを待たない）
+        setLocation("/");
       } catch (err: any) {
         console.error("[Auth] Error during post-registration sign-in:", err);
         setError("登録は成功しましたが、ログイン処理中にエラーが発生しました。ログインページからログインしてください。");

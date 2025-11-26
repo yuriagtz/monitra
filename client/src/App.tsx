@@ -36,6 +36,19 @@ function LoginRedirect() {
   );
 }
 
+// 認証済みユーザーが /register にアクセスした場合に / にリダイレクトするコンポーネント
+function RegisterRedirect() {
+  const [, setLocation] = useLocation();
+  useEffect(() => {
+    setLocation("/");
+  }, [setLocation]);
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+    </div>
+  );
+}
+
 // 認証済みユーザーが /dashboard にアクセスした場合に / にリダイレクトするコンポーネント
 function DashboardRedirect() {
   const [, setLocation] = useLocation();
@@ -83,6 +96,8 @@ function ProtectedRoutes() {
         <Route path="/dashboard" component={DashboardRedirect} />
         {/* ログイン済みで /login にアクセスした場合は / にリダイレクト */}
         <Route path="/login" component={LoginRedirect} />
+        {/* ログイン済みで /register にアクセスした場合は / にリダイレクト */}
+        <Route path="/register" component={RegisterRedirect} />
         <Route path="/landing-pages" component={LandingPages} />
         <Route path="/history/:id" component={MonitoringHistory} />
         <Route path="/creatives" component={Creatives} />
