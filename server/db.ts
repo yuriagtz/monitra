@@ -419,6 +419,23 @@ export async function addTagToLandingPage(landingPageId: number, tagId: number) 
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   
+  // 重複チェック: 既に同じタグが付与されているか確認
+  const existing = await db
+    .select()
+    .from(landingPageTags)
+    .where(
+      and(
+        eq(landingPageTags.landingPageId, landingPageId),
+        eq(landingPageTags.tagId, tagId)
+      )
+    )
+    .limit(1);
+  
+  if (existing.length > 0) {
+    // 既に存在する場合はエラーを投げずに成功として扱う（冪等性）
+    return;
+  }
+  
   await db.insert(landingPageTags).values({ landingPageId, tagId });
 }
 
@@ -471,6 +488,23 @@ export async function getLandingPageTagsByUserId(userId: number) {
 export async function addTagToCreative(creativeId: number, tagId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+
+  // 重複チェック: 既に同じタグが付与されているか確認
+  const existing = await db
+    .select()
+    .from(creativeTags)
+    .where(
+      and(
+        eq(creativeTags.creativeId, creativeId),
+        eq(creativeTags.tagId, tagId)
+      )
+    )
+    .limit(1);
+  
+  if (existing.length > 0) {
+    // 既に存在する場合はエラーを投げずに成功として扱う（冪等性）
+    return;
+  }
 
   await db.insert(creativeTags).values({
     creativeId,

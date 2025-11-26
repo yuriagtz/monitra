@@ -46,11 +46,17 @@ export function LPTagSelector({ landingPageId }: LPTagSelectorProps) {
 
   const addTag = trpc.tags.addToLandingPage.useMutation({
     onMutate: async ({ tagId }) => {
+      // 重複チェック: 既に追加されている場合は何もしない
+      const currentTags = utils.tags.getForLandingPage.getData({ landingPageId });
+      if (currentTags?.some((t) => t.id === tagId)) {
+        throw new Error("このタグは既に追加されています");
+      }
+
       // Optimistic update: 即座に画面に反映
       await utils.tags.getForLandingPage.cancel({ landingPageId });
-      const previousTags = utils.tags.getForLandingPage.getData({ landingPageId });
+      const previousTags = currentTags || [];
       
-      if (previousTags && allTags) {
+      if (allTags) {
         const tagToAdd = allTags.find((t) => t.id === tagId);
         if (tagToAdd) {
           utils.tags.getForLandingPage.setData(
@@ -64,7 +70,7 @@ export function LPTagSelector({ landingPageId }: LPTagSelectorProps) {
     },
     onSuccess: () => {
       toast.success("タグを追加しました");
-      // 関連するクエリのキャッシュを無効化
+      // サーバーから最新データを取得して確実に反映
       utils.tags.getForLandingPage.invalidate({ landingPageId });
       utils.tags.getForUserLandingPages.invalidate();
     },
@@ -112,6 +118,11 @@ export function LPTagSelector({ landingPageId }: LPTagSelectorProps) {
   });
 
   const handleToggleTag = (tagId: number) => {
+    // 処理中の場合は何もしない（重複送信を防ぐ）
+    if (addTag.isPending || removeTag.isPending) {
+      return;
+    }
+
     const isAssigned = lpTags?.some((t) => t.id === tagId);
     if (isAssigned) {
       // 削除確認ダイアログを表示
@@ -121,7 +132,10 @@ export function LPTagSelector({ landingPageId }: LPTagSelectorProps) {
         setIsDeleteDialogOpen(true);
       }
     } else {
-      addTag.mutate({ landingPageId, tagId });
+      // 既に追加されている場合は追加しない
+      if (!lpTags?.some((t) => t.id === tagId)) {
+        addTag.mutate({ landingPageId, tagId });
+      }
     }
   };
 

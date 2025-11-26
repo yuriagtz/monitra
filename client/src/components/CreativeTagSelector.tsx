@@ -48,11 +48,17 @@ export function CreativeTagSelector({ creativeId }: CreativeTagSelectorProps) {
 
   const addTag = trpc.tags.addToCreative.useMutation({
     onMutate: async ({ tagId }) => {
+      // 重複チェック: 既に追加されている場合は何もしない
+      const currentTags = utils.tags.getForCreative.getData({ creativeId });
+      if (currentTags?.some((t) => t.id === tagId)) {
+        throw new Error("このタグは既に追加されています");
+      }
+
       // Optimistic update: 即座に画面に反映
       await utils.tags.getForCreative.cancel({ creativeId });
-      const previousTags = utils.tags.getForCreative.getData({ creativeId });
+      const previousTags = currentTags || [];
       
-      if (previousTags && allTags) {
+      if (allTags) {
         const tagToAdd = allTags.find((t) => t.id === tagId);
         if (tagToAdd) {
           utils.tags.getForCreative.setData(
@@ -66,7 +72,7 @@ export function CreativeTagSelector({ creativeId }: CreativeTagSelectorProps) {
     },
     onSuccess: () => {
       toast.success("タグを追加しました");
-      // 関連するクエリのキャッシュを無効化
+      // サーバーから最新データを取得して確実に反映
       utils.tags.getForCreative.invalidate({ creativeId });
       utils.tags.getForUserCreatives.invalidate();
     },
@@ -114,6 +120,11 @@ export function CreativeTagSelector({ creativeId }: CreativeTagSelectorProps) {
   });
 
   const handleToggleTag = (tagId: number) => {
+    // 処理中の場合は何もしない（重複送信を防ぐ）
+    if (addTag.isPending || removeTag.isPending) {
+      return;
+    }
+
     const isAssigned = creativeTags?.some((t) => t.id === tagId);
     if (isAssigned) {
       // 削除確認ダイアログを表示
@@ -123,7 +134,10 @@ export function CreativeTagSelector({ creativeId }: CreativeTagSelectorProps) {
         setIsDeleteDialogOpen(true);
       }
     } else {
-      addTag.mutate({ creativeId, tagId });
+      // 既に追加されている場合は追加しない
+      if (!creativeTags?.some((t) => t.id === tagId)) {
+        addTag.mutate({ creativeId, tagId });
+      }
     }
   };
 
