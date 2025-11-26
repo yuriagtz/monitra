@@ -433,10 +433,19 @@ export async function addTagToLandingPage(landingPageId: number, tagId: number) 
   
   if (existing.length > 0) {
     // 既に存在する場合はエラーを投げずに成功として扱う（冪等性）
+    // ただし、データベースのユニーク制約により、今後は重複が防がれる
     return;
   }
   
-  await db.insert(landingPageTags).values({ landingPageId, tagId });
+  try {
+    await db.insert(landingPageTags).values({ landingPageId, tagId });
+  } catch (error: any) {
+    // ユニーク制約違反の場合は、既に存在するものとして扱う（冪等性）
+    if (error.code === '23505' || error.message?.includes('unique') || error.message?.includes('duplicate')) {
+      return;
+    }
+    throw error;
+  }
 }
 
 export async function removeTagFromLandingPage(landingPageId: number, tagId: number) {
@@ -503,13 +512,22 @@ export async function addTagToCreative(creativeId: number, tagId: number) {
   
   if (existing.length > 0) {
     // 既に存在する場合はエラーを投げずに成功として扱う（冪等性）
+    // ただし、データベースのユニーク制約により、今後は重複が防がれる
     return;
   }
 
-  await db.insert(creativeTags).values({
-    creativeId,
-    tagId,
-  } as InsertCreativeTag);
+  try {
+    await db.insert(creativeTags).values({
+      creativeId,
+      tagId,
+    } as InsertCreativeTag);
+  } catch (error: any) {
+    // ユニーク制約違反の場合は、既に存在するものとして扱う（冪等性）
+    if (error.code === '23505' || error.message?.includes('unique') || error.message?.includes('duplicate')) {
+      return;
+    }
+    throw error;
+  }
 }
 
 export async function removeTagFromCreative(creativeId: number, tagId: number) {

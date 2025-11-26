@@ -70,10 +70,12 @@ export function CreativeTagSelector({ creativeId }: CreativeTagSelectorProps) {
       
       return { previousTags };
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("タグを追加しました");
       // サーバーから最新データを取得して確実に反映
-      utils.tags.getForCreative.invalidate({ creativeId });
+      // 少し待ってからrefetchすることで、サーバー側の処理が完了するのを待つ
+      await new Promise(resolve => setTimeout(resolve, 100));
+      await utils.tags.getForCreative.refetch({ creativeId });
       utils.tags.getForUserCreatives.invalidate();
     },
     onError: (error, variables, context) => {

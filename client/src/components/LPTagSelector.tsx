@@ -68,10 +68,12 @@ export function LPTagSelector({ landingPageId }: LPTagSelectorProps) {
       
       return { previousTags };
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("タグを追加しました");
       // サーバーから最新データを取得して確実に反映
-      utils.tags.getForLandingPage.invalidate({ landingPageId });
+      // 少し待ってからrefetchすることで、サーバー側の処理が完了するのを待つ
+      await new Promise(resolve => setTimeout(resolve, 100));
+      await utils.tags.getForLandingPage.refetch({ landingPageId });
       utils.tags.getForUserLandingPages.invalidate();
     },
     onError: (error, variables, context) => {
