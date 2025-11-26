@@ -100,12 +100,14 @@ export function LPTagSelector({ landingPageId }: LPTagSelectorProps) {
       
       return { previousTags };
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("タグを削除しました");
       setIsDeleteDialogOpen(false);
       setTagToRemove(null);
-      // 関連するクエリのキャッシュを無効化
-      utils.tags.getForLandingPage.invalidate({ landingPageId });
+      // サーバーから最新データを取得して確実に反映
+      // 少し待ってからrefetchすることで、サーバー側の処理が完了するのを待つ
+      await new Promise(resolve => setTimeout(resolve, 100));
+      await utils.tags.getForLandingPage.refetch({ landingPageId });
       utils.tags.getForUserLandingPages.invalidate();
     },
     onError: (error, variables, context) => {
