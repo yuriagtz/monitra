@@ -150,7 +150,7 @@ export function LPTagSelector({ landingPageId }: LPTagSelectorProps) {
         <AlertDialogHeader>
           <AlertDialogTitle>タグを削除しますか？</AlertDialogTitle>
           <AlertDialogDescription>
-            「{tagToRemove?.name}」タグを削除します。この操作は取り消せません。
+            「{tagToRemove?.name}」タグを削除します。
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
