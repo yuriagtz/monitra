@@ -5,8 +5,19 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { trpc } from "@/lib/trpc";
 import { Check, Plus } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 interface LPTagSelectorProps {
@@ -14,6 +25,9 @@ interface LPTagSelectorProps {
 }
 
 export function LPTagSelector({ landingPageId }: LPTagSelectorProps) {
+  const [tagToRemove, setTagToRemove] = useState<{ id: number; name: string } | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
   const { data: allTags } = trpc.tags.list.useQuery(undefined, {
     staleTime: 1000 * 60 * 10, // 10分間キャッシュ
     refetchOnWindowFocus: false,
@@ -42,18 +56,33 @@ export function LPTagSelector({ landingPageId }: LPTagSelectorProps) {
     onSuccess: () => {
       toast.success("タグを削除しました");
       refetch();
+      setIsDeleteDialogOpen(false);
+      setTagToRemove(null);
     },
     onError: (error) => {
       toast.error(`エラー: ${error.message}`);
+      setIsDeleteDialogOpen(false);
+      setTagToRemove(null);
     },
   });
 
   const handleToggleTag = (tagId: number) => {
     const isAssigned = lpTags?.some((t) => t.id === tagId);
     if (isAssigned) {
-      removeTag.mutate({ landingPageId, tagId });
+      // 削除確認ダイアログを表示
+      const tag = lpTags.find((t) => t.id === tagId);
+      if (tag) {
+        setTagToRemove({ id: tagId, name: tag.name });
+        setIsDeleteDialogOpen(true);
+      }
     } else {
       addTag.mutate({ landingPageId, tagId });
+    }
+  };
+
+  const handleConfirmDelete = () => {
+    if (tagToRemove) {
+      removeTag.mutate({ landingPageId, tagId: tagToRemove.id });
     }
   };
 
@@ -63,18 +92,19 @@ export function LPTagSelector({ landingPageId }: LPTagSelectorProps) {
   });
 
   return (
-    <div className="flex items-center gap-2 flex-wrap">
-      {lpTags?.map((tag) => (
-        <Badge
-          key={tag.id}
-          style={{ backgroundColor: tag.color }}
-          className="text-white cursor-pointer hover:opacity-80"
-          onClick={() => handleToggleTag(tag.id)}
-        >
-          {tag.name}
-        </Badge>
-      ))}
-      <Popover>
+    <>
+      <div className="flex items-center gap-2 flex-wrap">
+        {lpTags?.map((tag) => (
+          <Badge
+            key={tag.id}
+            style={{ backgroundColor: tag.color }}
+            className="text-white cursor-pointer hover:opacity-80"
+            onClick={() => handleToggleTag(tag.id)}
+          >
+            {tag.name}
+          </Badge>
+        ))}
+        <Popover>
         <PopoverTrigger asChild>
           <Button variant="outline" size="sm" className="h-6 px-2">
             <Plus className="w-3 h-3" />
@@ -114,5 +144,23 @@ export function LPTagSelector({ landingPageId }: LPTagSelectorProps) {
         </PopoverContent>
       </Popover>
     </div>
+
+    <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>タグを削除しますか？</AlertDialogTitle>
+          <AlertDialogDescription>
+            「{tagToRemove?.name}」タグを削除します。この操作は取り消せません。
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>キャンセル</AlertDialogCancel>
+          <AlertDialogAction onClick={handleConfirmDelete}>
+            削除
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }

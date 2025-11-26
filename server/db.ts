@@ -426,8 +426,14 @@ export async function removeTagFromLandingPage(landingPageId: number, tagId: num
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   
+  // 特定のタグのみを削除（landingPageIdとtagIdの両方を条件に含める）
   await db.delete(landingPageTags)
-    .where(eq(landingPageTags.landingPageId, landingPageId));
+    .where(
+      and(
+        eq(landingPageTags.landingPageId, landingPageId),
+        eq(landingPageTags.tagId, tagId)
+      )
+    );
 }
 
 export async function getTagsForLandingPage(landingPageId: number) {

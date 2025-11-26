@@ -5,8 +5,19 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { trpc } from "@/lib/trpc";
 import { Check, Plus } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 interface CreativeTagSelectorProps {
@@ -14,6 +25,9 @@ interface CreativeTagSelectorProps {
 }
 
 export function CreativeTagSelector({ creativeId }: CreativeTagSelectorProps) {
+  const [tagToRemove, setTagToRemove] = useState<{ id: number; name: string } | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
   const { data: allTags } = trpc.tags.list.useQuery(undefined, {
     staleTime: 1000 * 60 * 10,
     refetchOnWindowFocus: false,
@@ -44,18 +58,33 @@ export function CreativeTagSelector({ creativeId }: CreativeTagSelectorProps) {
     onSuccess: () => {
       toast.success("タグを削除しました");
       refetch();
+      setIsDeleteDialogOpen(false);
+      setTagToRemove(null);
     },
     onError: (error) => {
       toast.error(error.message || "タグの削除に失敗しました");
+      setIsDeleteDialogOpen(false);
+      setTagToRemove(null);
     },
   });
 
   const handleToggleTag = (tagId: number) => {
     const isAssigned = creativeTags?.some((t) => t.id === tagId);
     if (isAssigned) {
-      removeTag.mutate({ creativeId, tagId });
+      // 削除確認ダイアログを表示
+      const tag = creativeTags.find((t) => t.id === tagId);
+      if (tag) {
+        setTagToRemove({ id: tagId, name: tag.name });
+        setIsDeleteDialogOpen(true);
+      }
     } else {
       addTag.mutate({ creativeId, tagId });
+    }
+  };
+
+  const handleConfirmDelete = () => {
+    if (tagToRemove) {
+      removeTag.mutate({ creativeId, tagId: tagToRemove.id });
     }
   };
 
@@ -65,18 +94,19 @@ export function CreativeTagSelector({ creativeId }: CreativeTagSelectorProps) {
   });
 
   return (
-    <div className="flex items-center gap-2 flex-wrap justify-center">
-      {creativeTags?.map((tag) => (
-        <Badge
-          key={tag.id}
-          style={{ backgroundColor: tag.color }}
-          className="text-white cursor-pointer hover:opacity-80"
-          onClick={() => handleToggleTag(tag.id)}
-        >
-          {tag.name}
-        </Badge>
-      ))}
-      <Popover>
+    <>
+      <div className="flex items-center gap-2 flex-wrap justify-center">
+        {creativeTags?.map((tag) => (
+          <Badge
+            key={tag.id}
+            style={{ backgroundColor: tag.color }}
+            className="text-white cursor-pointer hover:opacity-80"
+            onClick={() => handleToggleTag(tag.id)}
+          >
+            {tag.name}
+          </Badge>
+        ))}
+        <Popover>
         <PopoverTrigger asChild>
           <Button variant="outline" size="sm" className="h-6 px-2">
             <Plus className="w-3 h-3" />
@@ -118,6 +148,24 @@ export function CreativeTagSelector({ creativeId }: CreativeTagSelectorProps) {
         </PopoverContent>
       </Popover>
     </div>
+
+    <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>タグを削除しますか？</AlertDialogTitle>
+          <AlertDialogDescription>
+            「{tagToRemove?.name}」タグを削除します。この操作は取り消せません。
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>キャンセル</AlertDialogCancel>
+          <AlertDialogAction onClick={handleConfirmDelete}>
+            削除
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
 
