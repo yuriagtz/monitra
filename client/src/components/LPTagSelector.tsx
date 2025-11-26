@@ -28,12 +28,14 @@ export function LPTagSelector({ landingPageId }: LPTagSelectorProps) {
   const [tagToRemove, setTagToRemove] = useState<{ id: number; name: string } | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
+  const utils = trpc.useUtils();
+
   const { data: allTags } = trpc.tags.list.useQuery(undefined, {
     staleTime: 1000 * 60 * 10, // 10分間キャッシュ
     refetchOnWindowFocus: false,
     refetchOnMount: false,
   });
-  const { data: lpTags, refetch } = trpc.tags.getForLandingPage.useQuery(
+  const { data: lpTags } = trpc.tags.getForLandingPage.useQuery(
     { landingPageId },
     {
       staleTime: 1000 * 60 * 5, // 5分間キャッシュ
@@ -43,23 +45,66 @@ export function LPTagSelector({ landingPageId }: LPTagSelectorProps) {
   );
 
   const addTag = trpc.tags.addToLandingPage.useMutation({
+    onMutate: async ({ tagId }) => {
+      // Optimistic update: 即座に画面に反映
+      await utils.tags.getForLandingPage.cancel({ landingPageId });
+      const previousTags = utils.tags.getForLandingPage.getData({ landingPageId });
+      
+      if (previousTags && allTags) {
+        const tagToAdd = allTags.find((t) => t.id === tagId);
+        if (tagToAdd) {
+          utils.tags.getForLandingPage.setData(
+            { landingPageId },
+            [...previousTags, { id: tagToAdd.id, name: tagToAdd.name, color: tagToAdd.color }]
+          );
+        }
+      }
+      
+      return { previousTags };
+    },
     onSuccess: () => {
       toast.success("タグを追加しました");
-      refetch();
+      // 関連するクエリのキャッシュを無効化
+      utils.tags.getForLandingPage.invalidate({ landingPageId });
+      utils.tags.getForUserLandingPages.invalidate();
     },
-    onError: (error) => {
+    onError: (error, variables, context) => {
+      // エラー時は元の状態に戻す
+      if (context?.previousTags) {
+        utils.tags.getForLandingPage.setData({ landingPageId }, context.previousTags);
+      }
       toast.error(`エラー: ${error.message}`);
     },
   });
 
   const removeTag = trpc.tags.removeFromLandingPage.useMutation({
+    onMutate: async ({ tagId }) => {
+      // Optimistic update: 即座に画面に反映
+      await utils.tags.getForLandingPage.cancel({ landingPageId });
+      const previousTags = utils.tags.getForLandingPage.getData({ landingPageId });
+      
+      if (previousTags) {
+        utils.tags.getForLandingPage.setData(
+          { landingPageId },
+          previousTags.filter((t) => t.id !== tagId)
+        );
+      }
+      
+      return { previousTags };
+    },
     onSuccess: () => {
       toast.success("タグを削除しました");
-      refetch();
       setIsDeleteDialogOpen(false);
       setTagToRemove(null);
+      // 関連するクエリのキャッシュを無効化
+      utils.tags.getForLandingPage.invalidate({ landingPageId });
+      utils.tags.getForUserLandingPages.invalidate();
     },
-    onError: (error) => {
+    onError: (error, variables, context) => {
+      // エラー時は元の状態に戻す
+      if (context?.previousTags) {
+        utils.tags.getForLandingPage.setData({ landingPageId }, context.previousTags);
+      }
       toast.error(`エラー: ${error.message}`);
       setIsDeleteDialogOpen(false);
       setTagToRemove(null);

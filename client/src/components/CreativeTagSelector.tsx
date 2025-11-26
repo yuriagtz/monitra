@@ -28,13 +28,15 @@ export function CreativeTagSelector({ creativeId }: CreativeTagSelectorProps) {
   const [tagToRemove, setTagToRemove] = useState<{ id: number; name: string } | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
+  const utils = trpc.useUtils();
+
   const { data: allTags } = trpc.tags.list.useQuery(undefined, {
     staleTime: 1000 * 60 * 10,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
   });
 
-  const { data: creativeTags, refetch } =
+  const { data: creativeTags } =
     trpc.tags.getForCreative.useQuery(
       { creativeId },
       {
@@ -45,23 +47,66 @@ export function CreativeTagSelector({ creativeId }: CreativeTagSelectorProps) {
     );
 
   const addTag = trpc.tags.addToCreative.useMutation({
+    onMutate: async ({ tagId }) => {
+      // Optimistic update: 即座に画面に反映
+      await utils.tags.getForCreative.cancel({ creativeId });
+      const previousTags = utils.tags.getForCreative.getData({ creativeId });
+      
+      if (previousTags && allTags) {
+        const tagToAdd = allTags.find((t) => t.id === tagId);
+        if (tagToAdd) {
+          utils.tags.getForCreative.setData(
+            { creativeId },
+            [...previousTags, { id: tagToAdd.id, name: tagToAdd.name, color: tagToAdd.color }]
+          );
+        }
+      }
+      
+      return { previousTags };
+    },
     onSuccess: () => {
       toast.success("タグを追加しました");
-      refetch();
+      // 関連するクエリのキャッシュを無効化
+      utils.tags.getForCreative.invalidate({ creativeId });
+      utils.tags.getForUserCreatives.invalidate();
     },
-    onError: (error) => {
+    onError: (error, variables, context) => {
+      // エラー時は元の状態に戻す
+      if (context?.previousTags) {
+        utils.tags.getForCreative.setData({ creativeId }, context.previousTags);
+      }
       toast.error(error.message || "タグの追加に失敗しました");
     },
   });
 
   const removeTag = trpc.tags.removeFromCreative.useMutation({
+    onMutate: async ({ tagId }) => {
+      // Optimistic update: 即座に画面に反映
+      await utils.tags.getForCreative.cancel({ creativeId });
+      const previousTags = utils.tags.getForCreative.getData({ creativeId });
+      
+      if (previousTags) {
+        utils.tags.getForCreative.setData(
+          { creativeId },
+          previousTags.filter((t) => t.id !== tagId)
+        );
+      }
+      
+      return { previousTags };
+    },
     onSuccess: () => {
       toast.success("タグを削除しました");
-      refetch();
       setIsDeleteDialogOpen(false);
       setTagToRemove(null);
+      // 関連するクエリのキャッシュを無効化
+      utils.tags.getForCreative.invalidate({ creativeId });
+      utils.tags.getForUserCreatives.invalidate();
     },
-    onError: (error) => {
+    onError: (error, variables, context) => {
+      // エラー時は元の状態に戻す
+      if (context?.previousTags) {
+        utils.tags.getForCreative.setData({ creativeId }, context.previousTags);
+      }
       toast.error(error.message || "タグの削除に失敗しました");
       setIsDeleteDialogOpen(false);
       setTagToRemove(null);
